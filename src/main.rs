@@ -3,7 +3,10 @@ use bevy::{
     prelude::*,
 };
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use level::{parse_level, Cell, Level, LEVELS};
 use std::collections::VecDeque;
+
+mod level;
 
 #[derive(Component)]
 struct Snake {
@@ -29,30 +32,64 @@ const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
 const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
 
 fn setup_system(mut commands: Commands) {
-    commands.spawn(Camera2dBundle { ..default() });
+    let level = parse_level(LEVELS[0]).unwrap();
 
-    let start_parts: Vec<(IVec2, IVec2)> = (0..6).map(|i| (IVec2::new(-i, 0), IVec2::X)).collect();
+    // Spawn the snake
+    {
+        let start_parts = &level.initial_snake;
 
-    for (index, part) in start_parts.iter().enumerate() {
-        commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::RED,
-                    custom_size: Some(SNAKE_SIZE),
+        for (index, part) in start_parts.iter().enumerate() {
+            commands
+                .spawn(SpriteBundle {
+                    sprite: Sprite {
+                        color: Color::GRAY,
+                        custom_size: Some(SNAKE_SIZE),
+                        ..default()
+                    },
+                    transform: Transform {
+                        translation: to_world(part.0).extend(0.0),
+                        ..default()
+                    },
                     ..default()
-                },
-                transform: Transform {
-                    translation: to_world(part.0).extend(0.0),
-                    ..default()
-                },
-                ..default()
-            })
-            .insert(SnakePart(index));
+                })
+                .insert(SnakePart(index));
+        }
+
+        commands.spawn(Snake {
+            parts: VecDeque::from(start_parts.clone()),
+        });
     }
 
-    commands.spawn(Snake {
-        parts: VecDeque::from(start_parts),
+    // Spawn the ground sprites
+    for (cell, position) in level.grid.iter() {
+        if cell != Cell::Wall {
+            continue;
+        }
+
+        commands.spawn(SpriteBundle {
+            sprite: Sprite {
+                color: Color::DARK_GRAY,
+                custom_size: Some(SNAKE_SIZE),
+                ..default()
+            },
+            transform: Transform {
+                translation: to_world(position).extend(0.0),
+                ..default()
+            },
+            ..default()
+        });
+    }
+
+    commands.spawn(Camera2dBundle {
+        transform: Transform::from_xyz(
+            level.grid.width as f32 * SNAKE_WIDTH * 0.5,
+            level.grid.height as f32 * SNAKE_WIDTH + 0.5,
+            0.0,
+        ),
+        ..default()
     });
+
+    commands.insert_resource(level);
 }
 
 fn to_world(position: IVec2) -> Vec2 {
@@ -61,6 +98,7 @@ fn to_world(position: IVec2) -> Vec2 {
 
 fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
+    level: Res<Level>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake), Without<MoveCommand>>,
 ) {
@@ -88,7 +126,11 @@ fn snake_movement_control_system(
     let new_position = snake.parts[0].0 + direction;
 
     // Check for collition with self.
-    if snake.parts.iter().any(|part| part.0 == new_position) {
+    if snake
+        .parts
+        .iter()
+        .any(|part| part.0 == new_position || !level.grid.is_empty(new_position))
+    {
         return;
     }
 
@@ -212,7 +254,7 @@ fn main() {
         .add_system(snake_movement_control_system)
         .add_system(snake_smooth_movement_system.after(snake_movement_control_system))
         .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system)
-        .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
-        .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
+        // .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
+        // .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
         .run();
 }
