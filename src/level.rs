@@ -62,6 +62,20 @@ pub struct Level {
     pub initial_snake: Vec<(IVec2, IVec2)>,
 }
 
+impl Level {
+    pub fn get_distance_to_ground(&self, position: IVec2) -> i32 {
+        let mut distance = 0;
+
+        let mut current_position = position;
+        while self.grid.cell_at(current_position) != Cell::Wall {
+            current_position += IVec2::NEG_Y;
+            distance += 1;
+        }
+
+        distance
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Grid {
     grid: Vec<Cell>,

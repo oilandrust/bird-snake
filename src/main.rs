@@ -1,3 +1,4 @@
+#[allow(unused)]
 use bevy::{
     diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin},
     prelude::*,
@@ -13,6 +14,16 @@ struct Snake {
     parts: VecDeque<(IVec2, IVec2)>,
 }
 
+impl Snake {
+    fn head_position(&self) -> IVec2 {
+        self.parts[0].0
+    }
+
+    fn len(&self) -> usize {
+        self.parts.len()
+    }
+}
+
 #[derive(Component, Default)]
 struct MoveCommand {
     velocity: f32,
@@ -21,6 +32,12 @@ struct MoveCommand {
 
 #[derive(Component)]
 struct SnakePart(usize);
+
+#[derive(Component)]
+struct GravityFall {
+    velocity: f32,
+    accumulated_distance: f32,
+}
 
 const GRID_TO_WORLD_UNIT: f32 = 25.;
 const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
@@ -134,9 +151,17 @@ fn snake_movement_control_system(
         None
     };
 
-    let Some(direction) = new_direction else{
+    let Some(direction) = new_direction else {
         return;
     };
+
+    // Check that we have enough parts to go up.
+    if direction == IVec2::Y {
+        let distance_to_ground = level.get_distance_to_ground(snake.head_position());
+        if distance_to_ground >= snake.len() as i32 {
+            return;
+        }
+    }
 
     let new_position = snake.parts[0].0 + direction;
 
@@ -145,15 +170,43 @@ fn snake_movement_control_system(
         return;
     }
 
-    if level.grid.cell_at(new_position) == Cell::Goal {}
-
+    // Finaly move the snake forward.
     snake.parts.push_front((new_position, direction));
     snake.parts.pop_back();
 
+    // Smooth move animation starts.
     commands.entity(snake_entity).insert(MoveCommand {
         velocity: SNAKE_START_VELOCITY,
         anim_offset: GRID_TO_WORLD_UNIT,
     });
+
+    // Check if snake is on the ground and spawn gravity fall if not.
+    let on_the_ground = !snake
+        .parts
+        .iter()
+        .all(|(position, _)| level.get_distance_to_ground(*position) > 1);
+
+    if !on_the_ground {
+        commands.entity(snake_entity).insert(GravityFall {
+            velocity: SNAKE_START_VELOCITY,
+            accumulated_distance: 0.0,
+        });
+
+        for (position, _) in snake.parts.iter_mut() {
+            *position += IVec2::NEG_Y;
+        }
+    }
+}
+
+fn gravity_system(mut commands: Commands, mut query: Query<(Entity, &mut GravityFall)>) {
+    let Ok((snake_entity, mut gravity_fall)) = query.get_single_mut() else {
+        return;
+    };
+
+    gravity_fall.accumulated_distance += gravity_fall.velocity;
+    if gravity_fall.accumulated_distance > GRID_TO_WORLD_UNIT {
+        commands.entity(snake_entity).remove::<GravityFall>();
+    }
 }
 
 fn snake_smooth_movement_system(
@@ -170,26 +223,38 @@ fn snake_smooth_movement_system(
     }
 }
 
+type WithMoveOrGravity = Or<(With<MoveCommand>, With<GravityFall>)>;
+
 fn update_sprite_positions_system(
-    snake_query: Query<(&Snake, &MoveCommand)>,
+    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), WithMoveOrGravity>,
     mut sprite_query: Query<(&mut Transform, &mut Sprite, &SnakePart)>,
 ) {
-    let Ok((snake, move_command)) = snake_query.get_single() else {
+    let Ok((snake, move_command, gravity_fall)) = snake_query.get_single() else {
         return;
     };
 
     for (mut transform, mut sprite, part) in sprite_query.iter_mut() {
         let direction = snake.parts[part.0].1;
-        let mut part_position =
-            to_world(snake.parts[part.0].0) - move_command.anim_offset * direction.as_vec2();
+        let mut part_position = to_world(snake.parts[part.0].0);
 
-        if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
-            // Extend sprites at a turn to cover the gaps.
-            let size_offset = direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-            sprite.custom_size = Some(SNAKE_SIZE + size_offset.abs());
-            part_position -= size_offset * 0.5;
-        } else {
-            sprite.custom_size = Some(SNAKE_SIZE);
+        // Move sprite with move anim.
+        if let Some(move_command) = move_command {
+            part_position -= move_command.anim_offset * direction.as_vec2();
+
+            // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
+            if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
+                let size_offset =
+                    direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
+                sprite.custom_size = Some(SNAKE_SIZE + size_offset.abs());
+                part_position -= size_offset * 0.5;
+            } else {
+                sprite.custom_size = Some(SNAKE_SIZE);
+            }
+        }
+
+        // Move sprite with gravity fall anim.
+        if let Some(gravity_fall) = gravity_fall {
+            part_position += (GRID_TO_WORLD_UNIT - gravity_fall.accumulated_distance) * Vec2::Y;
         }
 
         transform.translation.x = part_position.x;
@@ -259,13 +324,14 @@ fn main() {
             },
             ..default()
         }))
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // .add_plugin(LogDiagnosticsPlugin::default())
+        // .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_startup_system(setup_system)
         .add_system(bevy::window::close_on_esc)
         .add_system(snake_movement_control_system)
-        .add_system(snake_smooth_movement_system.after(snake_movement_control_system))
+        .add_system(gravity_system.after(snake_movement_control_system))
+        .add_system(snake_smooth_movement_system.after(gravity_system))
         .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system)
         // .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
         // .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
