@@ -1,4 +1,5 @@
 use std::ops::Index;
+use std::{fmt::Display, str::FromStr};
 
 use bevy::{prelude::*, utils::HashSet};
 
@@ -7,7 +8,7 @@ const LEVEL_0: &str = "....................
 .............####...
 ..............##....
 ......##.........#..
-......#..#.......##.
+......#..#.....X.##.
 .........##......##.
 ...aa@.......######.
 ..#################.
@@ -57,7 +58,7 @@ impl TryFrom<char> for Cell {
 #[derive(Debug, Clone, Resource)]
 pub struct Level {
     pub grid: Grid,
-    //pub goal_position: IVec2,
+    pub goal_position: IVec2,
     pub initial_snake: Vec<(IVec2, IVec2)>,
 }
 
@@ -80,15 +81,6 @@ impl Grid {
     pub fn is_empty(&self, position: IVec2) -> bool {
         let cell = self.cell_at(position);
         cell == Cell::Empty
-    }
-
-    pub fn print(&self) {
-        let mut output_string = String::with_capacity(self.grid.len() + self.height);
-        for line in self.grid.chunks(self.width) {
-            output_string.extend(line.iter().map(|cell| char::from(*cell)));
-            output_string.push('\n');
-        }
-        print!("{output_string}");
     }
 
     pub fn position_for_index(&self, index: usize) -> IVec2 {
@@ -118,6 +110,17 @@ impl Index<usize> for Grid {
     }
 }
 
+impl Display for Grid {
+    fn fmt(&self, formater: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut output_string = String::with_capacity(self.grid.len() + self.height);
+        for line in self.grid.chunks(self.width) {
+            output_string.extend(line.iter().map(|cell| char::from(*cell)));
+            output_string.push('\n');
+        }
+        write!(formater, "{output_string}")
+    }
+}
+
 pub struct GridIter<'a> {
     current: usize,
     grid: &'a Grid,
@@ -142,49 +145,52 @@ impl<'a> Iterator for GridIter<'a> {
     }
 }
 
-pub fn parse_level(level_string: &str) -> Result<Level, String> {
-    let mut lines: Vec<Vec<Cell>> = level_string
-        .split('\n')
-        .rev()
-        .map(|line| {
-            line.chars()
-                .filter_map(|char| char.try_into().ok())
-                .collect()
+impl FromStr for Grid {
+    type Err = String;
+
+    fn from_str(string: &str) -> Result<Self, Self::Err> {
+        let mut lines: Vec<Vec<Cell>> = string
+            .split('\n')
+            .rev()
+            .map(|line| {
+                line.chars()
+                    .filter_map(|char| char.try_into().ok())
+                    .collect()
+            })
+            .collect();
+
+        let width = lines
+            .iter()
+            .max_by_key(|line| line.len())
+            .ok_or("Malformated grid, empty line")?
+            .len();
+
+        let height = lines.len();
+
+        for line in &mut lines {
+            line.resize(width, Cell::Empty);
+        }
+
+        let grid: Vec<Cell> = lines.into_iter().flatten().collect();
+        Ok(Grid {
+            grid,
+            width,
+            height,
         })
-        .collect();
-
-    let width = lines
-        .iter()
-        .max_by_key(|line| line.len())
-        .ok_or("Malformated level")?
-        .len();
-
-    let height = lines.len();
-
-    for line in &mut lines {
-        line.resize(width, Cell::Empty);
     }
+}
 
-    let grid: Vec<Cell> = lines.into_iter().flatten().collect();
-    let mut grid = Grid {
-        grid,
-        width,
-        height,
-    };
-
-    grid.print();
+pub fn parse_level(level_string: &str) -> Result<Level, String> {
+    let mut grid = level_string.parse::<Grid>()?;
 
     // Find the player start position.
     let start_head_index = grid
         .grid
         .iter()
         .position(|&cell| cell == Cell::SnakeHead)
-        .ok_or_else(|| "Level is missing a player position.".to_string())?;
+        .ok_or_else(|| "Level is missing a snake head position.".to_string())?;
 
-    let start_head_position = IVec2 {
-        x: (start_head_index % width) as i32,
-        y: (start_head_index / width) as i32,
-    };
+    let start_head_position = grid.position_for_index(start_head_index);
 
     // Search for the parts around the head.
     let mut parts = vec![start_head_position];
@@ -213,12 +219,25 @@ pub fn parse_level(level_string: &str) -> Result<Level, String> {
         }
     }
 
+    // Find the player start position.
+    let goal_index = grid
+        .grid
+        .iter()
+        .position(|&cell| cell == Cell::Goal)
+        .ok_or_else(|| "Level is missing a goal position.".to_string())?;
+
+    let goal_position = grid.position_for_index(goal_index);
+
     // Set the cells where the player and loads are as empty, they are managed as part of the game state.
-    grid.grid[start_head_index] = Cell::Empty;
+    for part in &parts {
+        grid.set_cell(*part, Cell::Empty);
+    }
+    grid.set_cell(goal_position, Cell::Empty);
 
     // TODO: Infer direction from parts!
     Ok(Level {
         grid,
+        goal_position,
         initial_snake: parts.iter().map(|part| (*part, IVec2::X)).collect(),
     })
 }

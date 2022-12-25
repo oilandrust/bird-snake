@@ -22,8 +22,9 @@ struct MoveCommand {
 #[derive(Component)]
 struct SnakePart(usize);
 
-const SNAKE_WIDTH: f32 = 13.;
-const SNAKE_SIZE: Vec2 = Vec2::splat(SNAKE_WIDTH);
+const GRID_TO_WORLD_UNIT: f32 = 25.;
+const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
+const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
 const SNAKE_START_VELOCITY: f32 = 1.0;
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -69,7 +70,7 @@ fn setup_system(mut commands: Commands) {
         commands.spawn(SpriteBundle {
             sprite: Sprite {
                 color: Color::DARK_GRAY,
-                custom_size: Some(SNAKE_SIZE),
+                custom_size: Some(GRID_CELL_SIZE),
                 ..default()
             },
             transform: Transform {
@@ -80,10 +81,24 @@ fn setup_system(mut commands: Commands) {
         });
     }
 
+    // Spawn level goal sprite.
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            color: Color::LIME_GREEN,
+            custom_size: Some(GRID_CELL_SIZE),
+            ..default()
+        },
+        transform: Transform {
+            translation: to_world(level.goal_position).extend(0.0),
+            ..default()
+        },
+        ..default()
+    });
+
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
-            level.grid.width as f32 * SNAKE_WIDTH * 0.5,
-            level.grid.height as f32 * SNAKE_WIDTH + 0.5,
+            level.grid.width as f32 * GRID_TO_WORLD_UNIT * 0.5,
+            level.grid.height as f32 * GRID_TO_WORLD_UNIT * 0.5,
             0.0,
         ),
         ..default()
@@ -93,7 +108,7 @@ fn setup_system(mut commands: Commands) {
 }
 
 fn to_world(position: IVec2) -> Vec2 {
-    (position.as_vec2() + 0.5) * SNAKE_WIDTH
+    (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
 }
 
 fn snake_movement_control_system(
@@ -126,20 +141,18 @@ fn snake_movement_control_system(
     let new_position = snake.parts[0].0 + direction;
 
     // Check for collition with self.
-    if snake
-        .parts
-        .iter()
-        .any(|part| part.0 == new_position || !level.grid.is_empty(new_position))
-    {
+    if snake.parts.iter().any(|part| part.0 == new_position) || !level.grid.is_empty(new_position) {
         return;
     }
+
+    if level.grid.cell_at(new_position) == Cell::Goal {}
 
     snake.parts.push_front((new_position, direction));
     snake.parts.pop_back();
 
     commands.entity(snake_entity).insert(MoveCommand {
         velocity: SNAKE_START_VELOCITY,
-        anim_offset: SNAKE_WIDTH,
+        anim_offset: GRID_TO_WORLD_UNIT,
     });
 }
 
@@ -172,7 +185,7 @@ fn update_sprite_positions_system(
 
         if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
             // Extend sprites at a turn to cover the gaps.
-            let size_offset = direction.as_vec2() * (SNAKE_WIDTH - move_command.anim_offset);
+            let size_offset = direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
             sprite.custom_size = Some(SNAKE_SIZE + size_offset.abs());
             part_position -= size_offset * 0.5;
         } else {
@@ -186,9 +199,9 @@ fn update_sprite_positions_system(
 
 fn debug_draw_grid_system(mut lines: ResMut<DebugLines>) {
     for j in -10..=10 {
-        let y = j as f32 * SNAKE_WIDTH;
-        let start = Vec3::new(-10. * SNAKE_WIDTH, y, 0.);
-        let end = Vec3::new(10. * SNAKE_WIDTH, y, 0.);
+        let y = j as f32 * GRID_TO_WORLD_UNIT;
+        let start = Vec3::new(-10. * GRID_TO_WORLD_UNIT, y, 0.);
+        let end = Vec3::new(10. * GRID_TO_WORLD_UNIT, y, 0.);
         lines.line_colored(
             start,
             end,
@@ -198,9 +211,9 @@ fn debug_draw_grid_system(mut lines: ResMut<DebugLines>) {
     }
 
     for i in -10..=10 {
-        let x = i as f32 * SNAKE_WIDTH;
-        let start = Vec3::new(x, -10. * SNAKE_WIDTH, 0.);
-        let end = Vec3::new(x, 10. * SNAKE_WIDTH, 0.);
+        let x = i as f32 * GRID_TO_WORLD_UNIT;
+        let start = Vec3::new(x, -10. * GRID_TO_WORLD_UNIT, 0.);
+        let end = Vec3::new(x, 10. * GRID_TO_WORLD_UNIT, 0.);
         lines.line_colored(
             start,
             end,
