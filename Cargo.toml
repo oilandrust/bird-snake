@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 bevy = "0.9.1"
 bevy_prototype_debug_lines = "0.9.0"
+game-grid = { path = "game-grid", features = ["bevy-ivec2"] }

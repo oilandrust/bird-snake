@@ -114,8 +114,8 @@ fn setup_system(mut commands: Commands) {
 
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
-            level.grid.width as f32 * GRID_TO_WORLD_UNIT * 0.5,
-            level.grid.height as f32 * GRID_TO_WORLD_UNIT * 0.5,
+            level.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
+            level.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
             0.0,
         ),
         ..default()
@@ -188,7 +188,7 @@ fn snake_movement_control_system(
 
     if !on_the_ground {
         commands.entity(snake_entity).insert(GravityFall {
-            velocity: SNAKE_START_VELOCITY,
+            velocity: 0.4 * SNAKE_START_VELOCITY,
             accumulated_distance: 0.0,
         });
 

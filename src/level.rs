@@ -1,7 +1,5 @@
-use std::ops::Index;
-use std::{fmt::Display, str::FromStr};
-
 use bevy::{prelude::*, utils::HashSet};
+use game_grid::*;
 
 const LEVEL_0: &str = ".................... 
 .............######.
@@ -25,6 +23,10 @@ pub enum Cell {
     SnakeHead,
     SnakePart,
     Goal,
+}
+
+impl GridCell for Cell {
+    const EMPTY: Self = Cell::Empty;
 }
 
 impl From<Cell> for char {
@@ -57,7 +59,7 @@ impl TryFrom<char> for Cell {
 
 #[derive(Debug, Clone, Resource)]
 pub struct Level {
-    pub grid: Grid,
+    pub grid: Grid<Cell, IVec2>,
     pub goal_position: IVec2,
     pub initial_snake: Vec<(IVec2, IVec2)>,
 }
@@ -76,131 +78,12 @@ impl Level {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Grid {
-    grid: Vec<Cell>,
-    pub width: usize,
-    pub height: usize,
-}
-
-impl Grid {
-    pub fn cell_at(&self, position: IVec2) -> Cell {
-        self.grid[position.x as usize + self.width * position.y as usize]
-    }
-
-    pub fn set_cell(&mut self, position: IVec2, value: Cell) {
-        self.grid[position.x as usize + self.width * position.y as usize] = value;
-    }
-
-    pub fn is_empty(&self, position: IVec2) -> bool {
-        let cell = self.cell_at(position);
-        cell == Cell::Empty
-    }
-
-    pub fn position_for_index(&self, index: usize) -> IVec2 {
-        IVec2 {
-            x: (index % self.width) as i32,
-            y: (index / self.width) as i32,
-        }
-    }
-
-    pub fn iter(&self) -> GridIter {
-        GridIter {
-            current: 0,
-            grid: self,
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.grid.len()
-    }
-}
-
-impl Index<usize> for Grid {
-    type Output = Cell;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.grid[index]
-    }
-}
-
-impl Display for Grid {
-    fn fmt(&self, formater: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut output_string = String::with_capacity(self.grid.len() + self.height);
-        for line in self.grid.chunks(self.width) {
-            output_string.extend(line.iter().map(|cell| char::from(*cell)));
-            output_string.push('\n');
-        }
-        write!(formater, "{output_string}")
-    }
-}
-
-pub struct GridIter<'a> {
-    current: usize,
-    grid: &'a Grid,
-}
-
-impl<'a> Iterator for GridIter<'a> {
-    type Item = (Cell, IVec2);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.current == self.grid.len() {
-            return None;
-        }
-
-        let result = (
-            self.grid[self.current],
-            self.grid.position_for_index(self.current),
-        );
-
-        self.current += 1;
-
-        Some(result)
-    }
-}
-
-impl FromStr for Grid {
-    type Err = String;
-
-    fn from_str(string: &str) -> Result<Self, Self::Err> {
-        let mut lines: Vec<Vec<Cell>> = string
-            .split('\n')
-            .rev()
-            .map(|line| {
-                line.chars()
-                    .filter_map(|char| char.try_into().ok())
-                    .collect()
-            })
-            .collect();
-
-        let width = lines
-            .iter()
-            .max_by_key(|line| line.len())
-            .ok_or("Malformated grid, empty line")?
-            .len();
-
-        let height = lines.len();
-
-        for line in &mut lines {
-            line.resize(width, Cell::Empty);
-        }
-
-        let grid: Vec<Cell> = lines.into_iter().flatten().collect();
-        Ok(Grid {
-            grid,
-            width,
-            height,
-        })
-    }
-}
-
 pub fn parse_level(level_string: &str) -> Result<Level, String> {
-    let mut grid = level_string.parse::<Grid>()?;
+    let mut grid = level_string.parse::<Grid<Cell, IVec2>>()?;
 
     // Find the player start position.
     let start_head_index = grid
-        .grid
-        .iter()
+        .cells()
         .position(|&cell| cell == Cell::SnakeHead)
         .ok_or_else(|| "Level is missing a snake head position.".to_string())?;
 
@@ -235,8 +118,7 @@ pub fn parse_level(level_string: &str) -> Result<Level, String> {
 
     // Find the player start position.
     let goal_index = grid
-        .grid
-        .iter()
+        .cells()
         .position(|&cell| cell == Cell::Goal)
         .ok_or_else(|| "Level is missing a goal position.".to_string())?;
 

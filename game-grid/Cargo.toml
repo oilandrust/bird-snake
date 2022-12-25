@@ -1,0 +1,10 @@
+[package]
+name = "game-grid"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+bevy-ivec2 = ["dep:bevy"]
+
+[dependencies]
+bevy = { version = "0.9.1", optional = true }
