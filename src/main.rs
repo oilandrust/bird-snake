@@ -81,22 +81,24 @@ fn snake_movement_control_system(
         None
     };
 
-    if let Some(direction) = new_direction {
-        if direction == -snake.parts[0].1 {
-            return;
-        }
-        let head_position = snake.parts[0].0;
-        let new_position = head_position + direction;
-        let part_direction = direction;
+    let Some(direction) = new_direction else{
+        return;
+    };
 
-        snake.parts.push_front((new_position, part_direction));
-        snake.parts.pop_back();
+    let new_position = snake.parts[0].0 + direction;
 
-        commands.entity(snake_entity).insert(MoveCommand {
-            velocity: SNAKE_START_VELOCITY,
-            anim_offset: SNAKE_WIDTH,
-        });
+    // Check for collition with self.
+    if snake.parts.iter().any(|part| part.0 == new_position) {
+        return;
     }
+
+    snake.parts.push_front((new_position, direction));
+    snake.parts.pop_back();
+
+    commands.entity(snake_entity).insert(MoveCommand {
+        velocity: SNAKE_START_VELOCITY,
+        anim_offset: SNAKE_WIDTH,
+    });
 }
 
 fn snake_smooth_movement_system(
