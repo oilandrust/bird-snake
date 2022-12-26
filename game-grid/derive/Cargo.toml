@@ -1,0 +1,12 @@
+[package]
+name = "derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+derive-core = { version = "0.1.0", path = "../derive-core" }
+proc-macro-error = "1.0"
+proc-macro2 = "1.0"

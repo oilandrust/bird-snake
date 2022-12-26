@@ -1,6 +1,9 @@
 use core::slice::Iter;
+use std::marker::PhantomData;
 use std::ops::Index;
 use std::{fmt::Display, str::FromStr};
+
+pub use derive::GridCell;
 
 /// Trait to implement a type that can be used as a grid cell.
 pub trait GridCell: TryFrom<char> + Clone + Copy + PartialEq + Eq {
@@ -39,42 +42,37 @@ impl Position for IVec2 {
 }
 
 #[derive(Debug, Clone)]
-pub struct Grid<Cell, Point>
+pub struct Grid<Cell>
 where
     Cell: GridCell,
-    Point: Position,
 {
     cells: Vec<Cell>,
     width: usize,
     height: usize,
-
-    // TODO: Remove that.
-    _p: Point,
 }
 
-impl<Cell, Point> Grid<Cell, Point>
+impl<Cell> Grid<Cell>
 where
     Cell: GridCell,
-    Point: Position,
 {
-    pub fn cell_at(&self, position: Point) -> Cell {
+    pub fn cell_at<Point: Position>(&self, position: Point) -> Cell {
         self.cells[self.index_for_position(position)]
     }
 
-    pub fn set_cell(&mut self, position: Point, value: Cell) {
+    pub fn set_cell<Point: Position>(&mut self, position: Point, value: Cell) {
         let index = self.index_for_position(position);
         self.cells[index] = value;
     }
 
-    pub fn is_empty(&self, position: Point) -> bool {
+    pub fn is_empty<Point: Position>(&self, position: Point) -> bool {
         self.cell_at(position) == Cell::EMPTY
     }
 
-    pub fn position_for_index(&self, index: usize) -> Point {
+    pub fn position_for_index<Point: Position>(&self, index: usize) -> Point {
         Point::new((index % self.width) as i32, (index / self.width) as i32)
     }
 
-    pub fn index_for_position(&self, position: Point) -> usize {
+    pub fn index_for_position<Point: Position>(&self, position: Point) -> usize {
         position.x() as usize + self.width * position.y() as usize
     }
 
@@ -82,10 +80,11 @@ where
         self.cells.iter()
     }
 
-    pub fn iter(&self) -> GridIter<Cell, Point> {
+    pub fn iter<Point: Position>(&self) -> GridIter<Cell, Point> {
         GridIter {
             current: 0,
             grid: self,
+            phantom: PhantomData,
         }
     }
 
@@ -100,12 +99,22 @@ where
     pub fn height(&self) -> usize {
         self.height
     }
+
+    pub fn flip_y(mut self) -> Self {
+        self.cells = self
+            .cells
+            .chunks(self.width)
+            .rev()
+            .flatten()
+            .map(|cell| *cell)
+            .collect();
+        self
+    }
 }
 
-impl<Cell, Point> Index<usize> for Grid<Cell, Point>
+impl<Cell> Index<usize> for Grid<Cell>
 where
     Cell: GridCell,
-    Point: Position,
 {
     type Output = Cell;
 
@@ -114,11 +123,10 @@ where
     }
 }
 
-impl<Cell, Point> Display for Grid<Cell, Point>
+impl<Cell> Display for Grid<Cell>
 where
     char: From<Cell>,
     Cell: GridCell,
-    Point: Position,
 {
     fn fmt(&self, formater: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut output_string = String::with_capacity(self.cells.len() + self.height);
@@ -133,10 +141,10 @@ where
 pub struct GridIter<'a, Cell, Point>
 where
     Cell: GridCell,
-    Point: Position,
 {
     current: usize,
-    grid: &'a Grid<Cell, Point>,
+    grid: &'a Grid<Cell>,
+    phantom: PhantomData<Point>,
 }
 
 impl<'a, Cell, Point> Iterator for GridIter<'a, Cell, Point>
@@ -144,7 +152,7 @@ where
     Cell: GridCell,
     Point: Position,
 {
-    type Item = (Cell, Point);
+    type Item = (Point, Cell);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current == self.grid.len() {
@@ -152,8 +160,8 @@ where
         }
 
         let result = (
-            self.grid[self.current],
             self.grid.position_for_index(self.current),
+            self.grid[self.current],
         );
 
         self.current += 1;
@@ -162,17 +170,15 @@ where
     }
 }
 
-impl<Cell, Point> FromStr for Grid<Cell, Point>
+impl<Cell> FromStr for Grid<Cell>
 where
     Cell: GridCell,
-    Point: Position,
 {
     type Err = String;
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let mut lines: Vec<Vec<Cell>> = string
             .split('\n')
-            .rev()
             .map(|line| {
                 line.chars()
                     .filter_map(|char| char.try_into().ok())
@@ -197,7 +203,55 @@ where
             cells: grid,
             width,
             height,
-            _p: Point::new(0, 0),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    enum Cell {
+        Wall,
+        Empty,
+    }
+
+    impl GridCell for Cell {
+        const EMPTY: Self = Cell::Empty;
+    }
+
+    impl From<Cell> for char {
+        fn from(cell: Cell) -> char {
+            match cell {
+                Cell::Wall => '#',
+                Cell::Empty => ' ',
+            }
+        }
+    }
+
+    impl TryFrom<char> for Cell {
+        type Error = ();
+
+        fn try_from(value: char) -> Result<Self, Self::Error> {
+            match value {
+                '#' => Ok(Cell::Wall),
+                ' ' => Ok(Cell::Empty),
+                _ => Err(()),
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_grid() {
+        // Empty string.
+        let result = "".parse::<Grid<Cell>>();
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert!(result.len() == 0);
+
+        // Wrong character is error.
+        let result = "a".parse::<Grid<Cell>>();
+        assert!(!result.is_ok());
     }
 }

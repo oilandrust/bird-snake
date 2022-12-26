@@ -3,8 +3,12 @@ name = "game-grid"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = ["derive", "derive-core"]
+
 [features]
 bevy-ivec2 = ["dep:bevy"]
 
 [dependencies]
+derive = { version = "0.1.0", path = "derive" }
 bevy = { version = "0.9.1", optional = true }

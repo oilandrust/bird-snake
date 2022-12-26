@@ -1,0 +1,19 @@
+Project:
+* Refactor debugging facility
+* Modules
+
+End of level:
+* Condition
+* animation
+
+Level 2
+
+Eat and grow:
+* Condition
+* Animation
+* Level unlock Condition
+
+Level Editor
+
+Polish:
+Move and jump anim

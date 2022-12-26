@@ -4,8 +4,10 @@ use bevy::{
     prelude::*,
 };
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
-use level::{parse_level, Cell, Level, LEVELS};
+use level::{Cell, Level, LEVELS};
 use std::collections::VecDeque;
+
+use bevy_egui::{egui, EguiContext, EguiPlugin};
 
 mod level;
 
@@ -22,6 +24,21 @@ impl Snake {
     fn len(&self) -> usize {
         self.parts.len()
     }
+
+    fn is_standing(&self) -> bool {
+        (self.parts.front().unwrap().0.y - self.parts.back().unwrap().0.y)
+            == (self.len() - 1) as i32
+    }
+
+    fn occupies_position(&self, position: IVec2) -> bool {
+        self.parts.iter().any(|part| part.0 == position)
+    }
+
+    fn fall_one_unit(&mut self) {
+        for (position, _) in self.parts.iter_mut() {
+            *position += IVec2::NEG_Y;
+        }
+    }
 }
 
 #[derive(Component, Default)]
@@ -36,21 +53,34 @@ struct SnakePart(usize);
 #[derive(Component)]
 struct GravityFall {
     velocity: f32,
-    accumulated_distance: f32,
+    relative_y: f32,
 }
 
-const GRID_TO_WORLD_UNIT: f32 = 25.;
-const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
-const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
-const SNAKE_START_VELOCITY: f32 = 1.0;
+mod game_constants {
+    use bevy::prelude::*;
 
-const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
-const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
-const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
-const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
+    pub const GRID_TO_WORLD_UNIT: f32 = 25.;
+    pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
+    pub const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
+    pub const MOVE_START_VELOCITY: f32 = 4.0;
+    pub const JUMP_START_VELOCITY: f32 = 65.0;
+    pub const GRAVITY: f32 = 300.0;
+}
+
+pub const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
+pub const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
+pub const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
+pub const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
+
+#[derive(Resource)]
+struct GameConstants {
+    move_velocity: f32,
+    jump_velocity: f32,
+    gravity: f32,
+}
 
 fn setup_system(mut commands: Commands) {
-    let level = parse_level(LEVELS[0]).unwrap();
+    let level = Level::parse(LEVELS[0]).unwrap();
 
     // Spawn the snake
     {
@@ -61,7 +91,7 @@ fn setup_system(mut commands: Commands) {
                 .spawn(SpriteBundle {
                     sprite: Sprite {
                         color: Color::GRAY,
-                        custom_size: Some(SNAKE_SIZE),
+                        custom_size: Some(game_constants::SNAKE_SIZE),
                         ..default()
                     },
                     transform: Transform {
@@ -79,7 +109,7 @@ fn setup_system(mut commands: Commands) {
     }
 
     // Spawn the ground sprites
-    for (cell, position) in level.grid.iter() {
+    for (position, cell) in level.grid.iter() {
         if cell != Cell::Wall {
             continue;
         }
@@ -87,7 +117,7 @@ fn setup_system(mut commands: Commands) {
         commands.spawn(SpriteBundle {
             sprite: Sprite {
                 color: Color::DARK_GRAY,
-                custom_size: Some(GRID_CELL_SIZE),
+                custom_size: Some(game_constants::GRID_CELL_SIZE),
                 ..default()
             },
             transform: Transform {
@@ -102,7 +132,7 @@ fn setup_system(mut commands: Commands) {
     commands.spawn(SpriteBundle {
         sprite: Sprite {
             color: Color::LIME_GREEN,
-            custom_size: Some(GRID_CELL_SIZE),
+            custom_size: Some(game_constants::GRID_CELL_SIZE),
             ..default()
         },
         transform: Transform {
@@ -114,25 +144,42 @@ fn setup_system(mut commands: Commands) {
 
     commands.spawn(Camera2dBundle {
         transform: Transform::from_xyz(
-            level.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-            level.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
+            level.grid.width() as f32 * game_constants::GRID_TO_WORLD_UNIT * 0.5,
+            level.grid.height() as f32 * game_constants::GRID_TO_WORLD_UNIT * 0.5,
             0.0,
         ),
         ..default()
     });
 
     commands.insert_resource(level);
+    commands.insert_resource(GameConstants {
+        move_velocity: game_constants::MOVE_START_VELOCITY,
+        jump_velocity: game_constants::JUMP_START_VELOCITY,
+        gravity: game_constants::GRAVITY,
+    })
 }
 
 fn to_world(position: IVec2) -> Vec2 {
-    (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
+    (position.as_vec2() + 0.5) * game_constants::GRID_TO_WORLD_UNIT
 }
+
+fn min_distance_to_ground(level: &Level, snake: &Snake) -> i32 {
+    snake
+        .parts
+        .iter()
+        .map(|(position, _)| level.get_distance_to_ground(*position))
+        .min()
+        .unwrap()
+}
+
+type WithoutMoveOrFall = (Without<MoveCommand>, Without<GravityFall>);
 
 fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
     level: Res<Level>,
+    constants: Res<GameConstants>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Snake), Without<MoveCommand>>,
+    mut query: Query<(Entity, &mut Snake), WithoutMoveOrFall>,
 ) {
     let Ok((snake_entity, mut snake)) = query.get_single_mut() else {
         return;
@@ -156,17 +203,19 @@ fn snake_movement_control_system(
     };
 
     // Check that we have enough parts to go up.
-    if direction == IVec2::Y {
-        let distance_to_ground = level.get_distance_to_ground(snake.head_position());
-        if distance_to_ground >= snake.len() as i32 {
-            return;
-        }
+    // TODO_MAYBE: This could be done with a move up then fall.
+    if direction == IVec2::Y && snake.is_standing() {
+        commands.entity(snake_entity).insert(GravityFall {
+            velocity: constants.jump_velocity,
+            relative_y: 0.0,
+        });
+        return;
     }
 
     let new_position = snake.parts[0].0 + direction;
 
     // Check for collition with self.
-    if snake.parts.iter().any(|part| part.0 == new_position) || !level.grid.is_empty(new_position) {
+    if snake.occupies_position(new_position) || !level.grid.is_empty(new_position) {
         return;
     }
 
@@ -176,40 +225,56 @@ fn snake_movement_control_system(
 
     // Smooth move animation starts.
     commands.entity(snake_entity).insert(MoveCommand {
-        velocity: SNAKE_START_VELOCITY,
-        anim_offset: GRID_TO_WORLD_UNIT,
+        velocity: constants.move_velocity,
+        anim_offset: game_constants::GRID_TO_WORLD_UNIT,
     });
+}
 
-    // Check if snake is on the ground and spawn gravity fall if not.
-    let on_the_ground = !snake
-        .parts
-        .iter()
-        .all(|(position, _)| level.get_distance_to_ground(*position) > 1);
+fn gravity_system(
+    time: Res<Time>,
+    constants: Res<GameConstants>,
+    level: Res<Level>,
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
+) {
+    let Ok((snake_entity, mut snake, gravity_fall)) = query.get_single_mut() else {
+        return;
+    };
 
-    if !on_the_ground {
-        commands.entity(snake_entity).insert(GravityFall {
-            velocity: 0.4 * SNAKE_START_VELOCITY,
-            accumulated_distance: 0.0,
-        });
+    match gravity_fall {
+        Some(mut gravity_fall) => {
+            gravity_fall.velocity -= constants.gravity * time.delta_seconds();
+            gravity_fall.relative_y += gravity_fall.velocity * time.delta_seconds();
 
-        for (position, _) in snake.parts.iter_mut() {
-            *position += IVec2::NEG_Y;
+            // When relative y is 0, the sprites are aligned with the actual position.
+            if gravity_fall.relative_y < 0.0 {
+                // keep falling..
+                if min_distance_to_ground(&level, &snake) > 1 {
+                    gravity_fall.relative_y = game_constants::GRID_TO_WORLD_UNIT;
+
+                    snake.fall_one_unit();
+                } else {
+                    // ..or stop falling animation.
+                    commands.entity(snake_entity).remove::<GravityFall>();
+                }
+            }
+        }
+        None => {
+            // Check if snake is on the ground and spawn gravity fall if not.
+            if min_distance_to_ground(&level, &snake) > 1 {
+                commands.entity(snake_entity).insert(GravityFall {
+                    velocity: 0.0,
+                    relative_y: game_constants::GRID_TO_WORLD_UNIT,
+                });
+
+                snake.fall_one_unit();
+            }
         }
     }
 }
 
-fn gravity_system(mut commands: Commands, mut query: Query<(Entity, &mut GravityFall)>) {
-    let Ok((snake_entity, mut gravity_fall)) = query.get_single_mut() else {
-        return;
-    };
-
-    gravity_fall.accumulated_distance += gravity_fall.velocity;
-    if gravity_fall.accumulated_distance > GRID_TO_WORLD_UNIT {
-        commands.entity(snake_entity).remove::<GravityFall>();
-    }
-}
-
 fn snake_smooth_movement_system(
+    time: Res<Time>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut MoveCommand)>,
 ) {
@@ -217,16 +282,14 @@ fn snake_smooth_movement_system(
         return;
     };
 
-    move_command.anim_offset -= move_command.velocity;
+    move_command.anim_offset -= move_command.velocity + time.delta_seconds();
     if move_command.anim_offset < 0.0 {
         commands.entity(entity).remove::<MoveCommand>();
     }
 }
 
-type WithMoveOrGravity = Or<(With<MoveCommand>, With<GravityFall>)>;
-
 fn update_sprite_positions_system(
-    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), WithMoveOrGravity>,
+    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
     mut sprite_query: Query<(&mut Transform, &mut Sprite, &SnakePart)>,
 ) {
     let Ok((snake, move_command, gravity_fall)) = snake_query.get_single() else {
@@ -234,27 +297,29 @@ fn update_sprite_positions_system(
     };
 
     for (mut transform, mut sprite, part) in sprite_query.iter_mut() {
-        let direction = snake.parts[part.0].1;
         let mut part_position = to_world(snake.parts[part.0].0);
 
         // Move sprite with move anim.
         if let Some(move_command) = move_command {
+            let direction = snake.parts[part.0].1;
             part_position -= move_command.anim_offset * direction.as_vec2();
 
             // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
             if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
-                let size_offset =
-                    direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-                sprite.custom_size = Some(SNAKE_SIZE + size_offset.abs());
+                let size_offset = direction.as_vec2()
+                    * (game_constants::GRID_TO_WORLD_UNIT - move_command.anim_offset);
+                sprite.custom_size = Some(game_constants::SNAKE_SIZE + size_offset.abs());
                 part_position -= size_offset * 0.5;
             } else {
-                sprite.custom_size = Some(SNAKE_SIZE);
+                sprite.custom_size = Some(game_constants::SNAKE_SIZE);
             }
+        } else {
+            sprite.custom_size = Some(game_constants::SNAKE_SIZE);
         }
 
         // Move sprite with gravity fall anim.
         if let Some(gravity_fall) = gravity_fall {
-            part_position += (GRID_TO_WORLD_UNIT - gravity_fall.accumulated_distance) * Vec2::Y;
+            part_position += gravity_fall.relative_y * Vec2::Y;
         }
 
         transform.translation.x = part_position.x;
@@ -262,11 +327,15 @@ fn update_sprite_positions_system(
     }
 }
 
-fn debug_draw_grid_system(mut lines: ResMut<DebugLines>) {
-    for j in -10..=10 {
-        let y = j as f32 * GRID_TO_WORLD_UNIT;
-        let start = Vec3::new(-10. * GRID_TO_WORLD_UNIT, y, 0.);
-        let end = Vec3::new(10. * GRID_TO_WORLD_UNIT, y, 0.);
+fn debug_draw_grid_system(level: Res<Level>, mut lines: ResMut<DebugLines>) {
+    for j in 0..=level.grid.height() {
+        let y = j as f32 * game_constants::GRID_TO_WORLD_UNIT;
+        let start = Vec3::new(0., y, 0.);
+        let end = Vec3::new(
+            level.grid.width() as f32 * game_constants::GRID_TO_WORLD_UNIT,
+            y,
+            0.,
+        );
         lines.line_colored(
             start,
             end,
@@ -275,10 +344,14 @@ fn debug_draw_grid_system(mut lines: ResMut<DebugLines>) {
         );
     }
 
-    for i in -10..=10 {
-        let x = i as f32 * GRID_TO_WORLD_UNIT;
-        let start = Vec3::new(x, -10. * GRID_TO_WORLD_UNIT, 0.);
-        let end = Vec3::new(x, 10. * GRID_TO_WORLD_UNIT, 0.);
+    for i in 0..=level.grid.width() {
+        let x = i as f32 * game_constants::GRID_TO_WORLD_UNIT;
+        let start = Vec3::new(x, 0., 0.);
+        let end = Vec3::new(
+            x,
+            level.grid.height() as f32 * game_constants::GRID_TO_WORLD_UNIT,
+            0.,
+        );
         lines.line_colored(
             start,
             end,
@@ -293,23 +366,36 @@ fn debug_draw_snake_system(mut lines: ResMut<DebugLines>, query: Query<&Snake>) 
         return;
     };
 
-    let grid = snake.parts[0].0;
-    let world_grid = to_world(grid);
-    let world_grid = Vec3::new(world_grid.x, world_grid.y, 1.0);
+    for position in &snake.parts {
+        let world_grid = to_world(position.0);
+        let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
 
-    lines.line_colored(
-        world_grid + Vec3::new(5.0, 5.0, 1.0),
-        world_grid + Vec3::new(-5.0, -5.0, 1.0),
-        0.,
-        Color::BLUE,
-    );
+        lines.line_colored(
+            world_grid + Vec3::new(5.0, 5.0, 0.0),
+            world_grid + Vec3::new(-5.0, -5.0, 0.0),
+            0.,
+            Color::BLUE,
+        );
 
-    lines.line_colored(
-        world_grid + Vec3::new(-5.0, 5.0, 1.0),
-        world_grid + Vec3::new(5.0, -5.0, 1.0),
-        0.,
-        Color::BLUE,
-    );
+        lines.line_colored(
+            world_grid + Vec3::new(-5.0, 5.0, 0.0),
+            world_grid + Vec3::new(5.0, -5.0, 0.0),
+            0.,
+            Color::BLUE,
+        );
+    }
+}
+
+fn dev_ui_system(mut egui_context: ResMut<EguiContext>, mut game_constants: ResMut<GameConstants>) {
+    egui::Window::new("Hello").show(egui_context.ctx_mut(), |ui| {
+        ui.add(
+            egui::Slider::new(&mut game_constants.move_velocity, 0.0..=10.0).text("Move Velocity"),
+        );
+        ui.add(
+            egui::Slider::new(&mut game_constants.jump_velocity, 0.0..=300.0).text("Jump Velocity"),
+        );
+        ui.add(egui::Slider::new(&mut game_constants.gravity, 0.0..=900.0).text("Gravity"));
+    });
 }
 
 fn main() {
@@ -327,13 +413,15 @@ fn main() {
         // .add_plugin(LogDiagnosticsPlugin::default())
         // .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(EguiPlugin)
         .add_startup_system(setup_system)
         .add_system(bevy::window::close_on_esc)
         .add_system(snake_movement_control_system)
         .add_system(gravity_system.after(snake_movement_control_system))
         .add_system(snake_smooth_movement_system.after(gravity_system))
         .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system)
-        // .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
-        // .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
+        .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
+        .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
+        .add_system(dev_ui_system)
         .run();
 }
