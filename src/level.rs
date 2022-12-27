@@ -19,9 +19,9 @@ const LEVEL_1: &str = "............
 ..X.............
 ................ 
 ...a@........... 
-.###............
-####...........
-.####.........
+.###......o.....
+####.......o...
+.####.....o.o.
 .###......####.
 ..##....#######
 ..#############
@@ -35,6 +35,7 @@ pub enum Cell {
     Empty,
     SnakeHead,
     SnakePart,
+    Food,
     Goal,
 }
 
@@ -49,6 +50,7 @@ impl From<Cell> for char {
             Cell::Empty => ' ',
             Cell::SnakeHead => '@',
             Cell::SnakePart => 'a',
+            Cell::Food => 'o',
             Cell::Goal => 'X',
         }
     }
@@ -64,6 +66,7 @@ impl TryFrom<char> for Cell {
             '.' => Ok(Cell::Empty),
             '@' => Ok(Cell::SnakeHead),
             'a' => Ok(Cell::SnakePart),
+            'o' => Ok(Cell::Food),
             'X' => Ok(Cell::Goal),
             _ => Err(()),
         }
@@ -75,6 +78,7 @@ pub struct Level {
     pub grid: Grid<Cell>,
     pub goal_position: IVec2,
     pub initial_snake: Vec<(IVec2, IVec2)>,
+    pub food_positions: Vec<IVec2>,
 }
 
 impl Level {
@@ -164,11 +168,24 @@ impl Level {
         }
         grid.set_cell(goal_position, Cell::Empty);
 
+        // Find the food positons.
+        let food_positions: Vec<IVec2> = grid
+            .iter()
+            .filter(|(_, cell)| *cell == Cell::Food)
+            .map(|(position, _)| position)
+            .collect();
+
+        // And set empty.
+        for position in &food_positions {
+            grid.set_cell(*position, Cell::Empty);
+        }
+
         // TODO: Infer direction from parts!
         Ok(Level {
             grid,
             goal_position,
             initial_snake: parts.iter().map(|part| (*part, IVec2::X)).collect(),
+            food_positions: food_positions,
         })
     }
 }

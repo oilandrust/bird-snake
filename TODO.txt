@@ -1,4 +1,5 @@
-Level 2
+Level 2:
+* Add foods
 
 Eat and grow:
 * Condition

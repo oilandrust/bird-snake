@@ -86,6 +86,24 @@ fn spawn_level_entities_system(
             .insert(LevelEntity);
     }
 
+    // Spawn the food sprites
+    for position in &level.food_positions {
+        commands
+            .spawn(SpriteBundle {
+                sprite: Sprite {
+                    color: Color::ORANGE,
+                    custom_size: Some(GRID_CELL_SIZE),
+                    ..default()
+                },
+                transform: Transform {
+                    translation: to_world(*position).extend(0.0),
+                    ..default()
+                },
+                ..default()
+            })
+            .insert(LevelEntity);
+    }
+
     // Spawn level goal sprite.
     commands
         .spawn(SpriteBundle {
