@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use bevy_egui::{egui, EguiContext};
 
-use crate::dev_tools::DevToolsSettings;
+use crate::dev_tools_pluggin::DevToolsSettings;
 
 pub const GRID_TO_WORLD_UNIT: f32 = 25.;
 pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);

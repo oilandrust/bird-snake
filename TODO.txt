@@ -1,17 +1,15 @@
-Project:
-* Refactor debugging facility
-* Modules
-
-End of level:
-* Condition
-* animation
-
 Level 2
 
 Eat and grow:
 * Condition
 * Animation
 * Level unlock Condition
+
+End of level:
+* animation
+
+Project:
+* Refactor debugging facility for Modules
 
 Level Editor
 

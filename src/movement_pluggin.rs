@@ -1,11 +1,15 @@
 use bevy::prelude::*;
 
-use crate::{game_constants::*, level::Level, snake::Snake};
+use crate::{
+    game_constants_pluggin::*,
+    level::Level,
+    snake::{Snake, SnakePart},
+};
 
-pub const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
-pub const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
-pub const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
-pub const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
+const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
+const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
+const MOVE_DOWN_KEYS: [KeyCode; 2] = [KeyCode::S, KeyCode::Down];
+const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
 
 #[derive(Component, Default)]
 pub struct MoveCommand {
@@ -13,14 +17,21 @@ pub struct MoveCommand {
     anim_offset: f32,
 }
 
-// TODO; Make private.
-#[derive(Component)]
-pub struct SnakePart(pub usize);
-
 #[derive(Component)]
 pub struct GravityFall {
     velocity: f32,
     relative_y: f32,
+}
+
+pub struct MovementPluggin;
+
+impl Plugin for MovementPluggin {
+    fn build(&self, app: &mut App) {
+        app.add_system(snake_movement_control_system)
+            .add_system(gravity_system.after(snake_movement_control_system))
+            .add_system(snake_smooth_movement_system.after(gravity_system))
+            .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
+    }
 }
 
 fn min_distance_to_ground(level: &Level, snake: &Snake) -> i32 {
@@ -90,7 +101,7 @@ pub fn snake_movement_control_system(
     });
 }
 
-pub fn gravity_system(
+fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
     level: Res<Level>,
@@ -133,7 +144,7 @@ pub fn gravity_system(
     }
 }
 
-pub fn snake_smooth_movement_system(
+fn snake_smooth_movement_system(
     time: Res<Time>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut MoveCommand)>,
@@ -148,7 +159,7 @@ pub fn snake_smooth_movement_system(
     }
 }
 
-pub fn update_sprite_positions_system(
+fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
     mut sprite_query: Query<(&mut Transform, &mut Sprite, &SnakePart)>,
 ) {

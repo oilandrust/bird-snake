@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::{
-    game_constants::{to_world, GRID_TO_WORLD_UNIT},
+    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level::Level,
     snake::Snake,
 };
