@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     game_constants_pluggin::*,
     level::Level,
-    snake::{Snake, SnakePart},
+    snake::{respawn_snake_on_fall_system, Snake, SnakePart, SpawnSnakeEvent},
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -27,9 +27,11 @@ pub struct MovementPluggin;
 
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
-        app.add_system(snake_movement_control_system)
+        app.add_event::<SpawnSnakeEvent>()
+            .add_system(snake_movement_control_system)
             .add_system(gravity_system.after(snake_movement_control_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
+            .add_system(respawn_snake_on_fall_system.after(gravity_system))
             .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
     }
 }
@@ -86,7 +88,7 @@ pub fn snake_movement_control_system(
     let new_position = snake.parts[0].0 + direction;
 
     // Check for collition with self.
-    if snake.occupies_position(new_position) || !level.grid.is_empty(new_position) {
+    if snake.occupies_position(new_position) || !level.is_empty(new_position) {
         return;
     }
 

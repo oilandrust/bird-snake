@@ -4,7 +4,7 @@ use crate::{
     game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
     level::{Cell, Level, LEVELS},
     movement_pluggin::snake_movement_control_system,
-    snake::{spawn_snake_system, Snake},
+    snake::{spawn_snake_system, Snake, SpawnSnakeEvent},
 };
 
 pub struct StartLevelEvent(pub usize);
@@ -37,7 +37,11 @@ impl Plugin for LevelPluggin {
     }
 }
 
-fn load_level_system(mut commands: Commands, mut event_start_level: EventReader<StartLevelEvent>) {
+fn load_level_system(
+    mut commands: Commands,
+    mut event_start_level: EventReader<StartLevelEvent>,
+    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+) {
     let Some(event) = event_start_level.iter().next() else {
         return;
     };
@@ -47,6 +51,8 @@ fn load_level_system(mut commands: Commands, mut event_start_level: EventReader<
 
     commands.insert_resource(level);
     commands.insert_resource(CurrentLevelId(next_level_index));
+
+    spawn_snake_event.send(SpawnSnakeEvent);
 }
 
 fn spawn_level_entities_system(

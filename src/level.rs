@@ -27,7 +27,7 @@ const LEVEL_1: &str = "............
 ..#############
 ..#############";
 
-pub const LEVELS: [&str; 2] = [LEVEL_0, LEVEL_1];
+pub const LEVELS: [&str; 2] = [LEVEL_1, LEVEL_1];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Cell {
@@ -81,13 +81,35 @@ impl Level {
     pub fn get_distance_to_ground(&self, position: IVec2) -> i32 {
         let mut distance = 0;
 
+        // Outise bounds, there is no ground below.
+        if position.y <= 0 || position.x < 0 || position.x >= self.grid.width() as i32 {
+            return self.grid.height() as i32;
+        }
+
         let mut current_position = position;
         while self.grid.cell_at(current_position) != Cell::Wall {
             current_position += IVec2::NEG_Y;
             distance += 1;
+
+            // There is no ground below.
+            if current_position.y == 0 {
+                return self.grid.height() as i32;
+            }
         }
 
         distance
+    }
+
+    pub fn is_empty(&self, position: IVec2) -> bool {
+        if position.x < 0
+            || position.x >= self.grid.width() as i32
+            || position.y < 0
+            || position.y >= self.grid.height() as i32
+        {
+            return true;
+        }
+
+        self.grid.is_empty(position)
     }
 
     pub fn parse(level_string: &str) -> Result<Level, String> {
@@ -128,7 +150,7 @@ impl Level {
             }
         }
 
-        // Find the player start position.
+        // Find the goal position.
         let goal_index = grid
             .cells()
             .position(|&cell| cell == Cell::Goal)
@@ -136,7 +158,7 @@ impl Level {
 
         let goal_position = grid.position_for_index(goal_index);
 
-        // Set the cells where the player and loads are as empty, they are managed as part of the game state.
+        // Set the cells where the player and goal are as empty, they are managed as part of the game state.
         for part in &parts {
             grid.set_cell(*part, Cell::Empty);
         }
