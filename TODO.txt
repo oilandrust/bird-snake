@@ -1,8 +1,4 @@
-Level 2:
-* Add foods
-
 Eat and grow:
-* Condition
 * Animation
 * Level unlock Condition
 

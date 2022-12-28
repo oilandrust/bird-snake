@@ -27,6 +27,17 @@ const LEVEL_1: &str = "............
 ..#############
 ..#############";
 
+const EAT_GYM: &str = "....................
+.............######.
+...X...o...........
+..................
+...................
+...aa@.......######.
+..#################.
+.###################
+####################
+####################";
+
 pub const LEVELS: [&str; 2] = [LEVEL_1, LEVEL_1];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -185,7 +196,7 @@ impl Level {
             grid,
             goal_position,
             initial_snake: parts.iter().map(|part| (*part, IVec2::X)).collect(),
-            food_positions: food_positions,
+            food_positions,
         })
     }
 }

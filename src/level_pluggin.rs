@@ -13,6 +13,9 @@ pub struct ClearLevelEvent;
 #[derive(Component)]
 pub struct LevelEntity;
 
+#[derive(Component)]
+pub struct Food(pub IVec2);
+
 #[derive(Resource)]
 pub struct CurrentLevelId(usize);
 
@@ -86,7 +89,7 @@ fn spawn_level_entities_system(
             .insert(LevelEntity);
     }
 
-    // Spawn the food sprites
+    // Spawn the food sprites.
     for position in &level.food_positions {
         commands
             .spawn(SpriteBundle {
@@ -101,6 +104,7 @@ fn spawn_level_entities_system(
                 },
                 ..default()
             })
+            .insert(Food(*position))
             .insert(LevelEntity);
     }
 

@@ -3,7 +3,9 @@ use bevy::prelude::*;
 use crate::{
     game_constants_pluggin::*,
     level::Level,
-    snake::{respawn_snake_on_fall_system, Snake, SnakePart, SpawnSnakeEvent},
+    snake::{
+        grow_snake_on_move_system, respawn_snake_on_fall_system, Snake, SnakePart, SpawnSnakeEvent,
+    },
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -25,13 +27,17 @@ pub struct GravityFall {
 
 pub struct MovementPluggin;
 
+pub struct SnakeMovedEvent;
+
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
+            .add_event::<SnakeMovedEvent>()
             .add_system(snake_movement_control_system)
             .add_system(gravity_system.after(snake_movement_control_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
             .add_system(respawn_snake_on_fall_system.after(gravity_system))
+            .add_system(grow_snake_on_move_system.after(gravity_system))
             .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
     }
 }
@@ -52,6 +58,7 @@ pub fn snake_movement_control_system(
     level: Res<Level>,
     constants: Res<GameConstants>,
     mut commands: Commands,
+    mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut query: Query<(Entity, &mut Snake), WithoutMoveOrFall>,
 ) {
     let Ok((snake_entity, mut snake)) = query.get_single_mut() else {
@@ -95,6 +102,8 @@ pub fn snake_movement_control_system(
     // Finaly move the snake forward.
     snake.parts.push_front((new_position, direction));
     snake.parts.pop_back();
+
+    snake_moved_event.send(SnakeMovedEvent);
 
     // Smooth move animation starts.
     commands.entity(snake_entity).insert(MoveCommand {
