@@ -34,3 +34,6 @@ Cargo.lock
 # Ignore all local history of files
 .history
 .ionide
+
+### Temporary until game-grid is moved to own repo:
+game-grid

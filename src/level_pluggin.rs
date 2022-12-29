@@ -1,8 +1,8 @@
-use bevy::{app::AppExit, prelude::*};
+use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
-    level::{Cell, Level, LEVELS},
+    level::{Cell, LevelTemplate, LEVELS},
     movement_pluggin::snake_movement_control_system,
     snake::{spawn_snake_system, Snake, SpawnSnakeEvent},
 };
@@ -20,6 +20,59 @@ pub struct Food(pub IVec2);
 pub struct CurrentLevelId(usize);
 
 pub struct LevelPluggin;
+
+enum Walkable {
+    Food,
+    Wall,
+}
+
+#[derive(Resource)]
+pub struct LevelInstance {
+    walkable_positions: HashMap<IVec2, Walkable>,
+}
+
+impl LevelInstance {
+    pub fn new() -> Self {
+        LevelInstance {
+            walkable_positions: HashMap::new(),
+        }
+    }
+
+    pub fn is_empty(&self, position: IVec2) -> bool {
+        !self.walkable_positions.contains_key(&position)
+    }
+
+    pub fn set_empty(&mut self, position: IVec2) {
+        self.walkable_positions.remove(&position);
+    }
+
+    pub fn is_food_or_empty(&self, position: IVec2) -> bool {
+        match self.walkable_positions.get(&position) {
+            Some(Walkable::Food) => true,
+            Some(_) => false,
+            None => true,
+        }
+    }
+
+    pub fn get_distance_to_ground(&self, position: IVec2) -> i32 {
+        let mut distance = 0;
+
+        const ARBITRARY_HIGH_DISTANCE: i32 = 50;
+
+        let mut current_position = position;
+        while self.is_empty(current_position) {
+            current_position += IVec2::NEG_Y;
+            distance += 1;
+
+            // There is no ground below.
+            if current_position.y <= 0 {
+                return ARBITRARY_HIGH_DISTANCE;
+            }
+        }
+
+        distance
+    }
+}
 
 static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
 
@@ -50,9 +103,10 @@ fn load_level_system(
     };
 
     let next_level_index = event.0;
-    let level = Level::parse(LEVELS[next_level_index]).unwrap();
+    let level = LevelTemplate::parse(LEVELS[next_level_index]).unwrap();
 
     commands.insert_resource(level);
+    commands.insert_resource(LevelInstance::new());
     commands.insert_resource(CurrentLevelId(next_level_index));
 
     spawn_snake_event.send(SpawnSnakeEvent);
@@ -61,14 +115,15 @@ fn load_level_system(
 fn spawn_level_entities_system(
     mut commands: Commands,
     mut event_start_level: EventReader<StartLevelEvent>,
-    level: Res<Level>,
+    level_template: Res<LevelTemplate>,
+    mut level_instance: ResMut<LevelInstance>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
     }
 
     // Spawn the ground sprites
-    for (position, cell) in level.grid.iter() {
+    for (position, cell) in level_template.grid.iter() {
         if cell != Cell::Wall {
             continue;
         }
@@ -87,10 +142,14 @@ fn spawn_level_entities_system(
                 ..default()
             })
             .insert(LevelEntity);
+
+        level_instance
+            .walkable_positions
+            .insert(position, Walkable::Wall);
     }
 
     // Spawn the food sprites.
-    for position in &level.food_positions {
+    for position in &level_template.food_positions {
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
@@ -106,6 +165,10 @@ fn spawn_level_entities_system(
             })
             .insert(Food(*position))
             .insert(LevelEntity);
+
+        level_instance
+            .walkable_positions
+            .insert(*position, Walkable::Food);
     }
 
     // Spawn level goal sprite.
@@ -117,7 +180,7 @@ fn spawn_level_entities_system(
                 ..default()
             },
             transform: Transform {
-                translation: to_world(level.goal_position).extend(0.0),
+                translation: to_world(level_template.goal_position).extend(0.0),
                 ..default()
             },
             ..default()
@@ -127,8 +190,8 @@ fn spawn_level_entities_system(
     commands
         .spawn(Camera2dBundle {
             transform: Transform::from_xyz(
-                level.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                level.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
+                level_template.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
+                level_template.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
                 0.0,
             ),
             ..default()
@@ -148,10 +211,12 @@ pub fn clear_level_system(
     for entity in &query {
         commands.entity(entity).despawn();
     }
+
+    commands.remove_resource::<LevelInstance>();
 }
 
 pub fn check_for_level_completion_system(
-    level: Res<Level>,
+    level: Res<LevelTemplate>,
     level_id: Res<CurrentLevelId>,
     mut event_start_level: EventWriter<StartLevelEvent>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,

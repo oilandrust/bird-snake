@@ -29,6 +29,16 @@ const LEVEL_1: &str = "............
 ..#############
 ..#############";
 
+const LEVEL_2: &str = "............
+...............
+...............
+..a@........... 
+..###..........
+.#####...X....
+.oooooo....
+.....######.... 
+......######...";
+
 const EAT_GYM: &str = "....................
 .............######.
 ...X...o..oo.......
@@ -40,7 +50,7 @@ const EAT_GYM: &str = "....................
 ####################
 ####################";
 
-pub const LEVELS: [&str; 2] = [LEVEL_0, LEVEL_1];
+pub const LEVELS: [&str; 3] = [LEVEL_0, LEVEL_1, LEVEL_2];
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum Cell {
@@ -91,7 +101,7 @@ impl TryFrom<char> for Cell {
 }
 
 #[derive(Debug, Clone, Resource)]
-pub struct Level {
+pub struct LevelTemplate {
     pub grid: Grid<Cell>,
     pub goal_position: IVec2,
     pub initial_snake: Vec<(IVec2, IVec2)>,
@@ -107,42 +117,8 @@ enum ParseLevelError {
     MissingSnakeHead,
 }
 
-impl Level {
-    pub fn get_distance_to_ground(&self, position: IVec2) -> i32 {
-        let mut distance = 0;
-
-        // Outise bounds, there is no ground below.
-        if position.y <= 0 || position.x < 0 || position.x >= self.grid.width() as i32 {
-            return self.grid.height() as i32;
-        }
-
-        let mut current_position = position;
-        while self.grid.cell_at(current_position) != Cell::Wall {
-            current_position += IVec2::NEG_Y;
-            distance += 1;
-
-            // There is no ground below.
-            if current_position.y == 0 {
-                return self.grid.height() as i32;
-            }
-        }
-
-        distance
-    }
-
-    pub fn is_empty(&self, position: IVec2) -> bool {
-        if position.x < 0
-            || position.x >= self.grid.width() as i32
-            || position.y < 0
-            || position.y >= self.grid.height() as i32
-        {
-            return true;
-        }
-
-        self.grid.is_empty(position)
-    }
-
-    pub fn parse(level_string: &str) -> Result<Level> {
+impl LevelTemplate {
+    pub fn parse(level_string: &str) -> Result<LevelTemplate> {
         let mut grid = level_string.parse::<Grid<Cell>>()?.flip_y();
 
         // Find the player start position.
@@ -207,7 +183,7 @@ impl Level {
         }
 
         // TODO: Infer direction from parts!
-        Ok(Level {
+        Ok(LevelTemplate {
             grid,
             goal_position,
             initial_snake: parts.iter().map(|part| (*part, IVec2::X)).collect(),

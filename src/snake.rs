@@ -4,8 +4,8 @@ use std::collections::VecDeque;
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
-    level::Level,
-    level_pluggin::{Food, LevelEntity},
+    level::LevelTemplate,
+    level_pluggin::{Food, LevelEntity, LevelInstance},
     movement_pluggin::{GravityFall, SnakeMovedEvent},
 };
 
@@ -128,7 +128,7 @@ impl Snake {
 pub fn spawn_snake_system(
     mut commands: Commands,
     mut event_spawn_snake: EventReader<SpawnSnakeEvent>,
-    level: Res<Level>,
+    level: Res<LevelTemplate>,
 ) {
     if event_spawn_snake.iter().next().is_none() {
         return;
@@ -162,7 +162,7 @@ pub fn respawn_snake_on_fall_system(
 
         commands.entity(snake_entity).despawn();
         for snake_part_entity in &parts_query {
-            commands.entity(snake_part_entity).despawn();
+            commands.entity(snake_part_entity).despawn_recursive();
         }
     }
 }
@@ -170,6 +170,7 @@ pub fn respawn_snake_on_fall_system(
 pub fn grow_snake_on_move_system(
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
     mut commands: Commands,
+    mut level: ResMut<LevelInstance>,
     mut snake_query: Query<&mut Snake>,
     foods_query: Query<(Entity, &Food), With<Food>>,
 ) {
@@ -187,6 +188,8 @@ pub fn grow_snake_on_move_system(
         }
 
         commands.entity(food_entity).despawn();
+
+        level.set_empty(food.0);
 
         let tail_direction = snake.tail_direction();
         let new_part_position = snake.tail_position() - tail_direction;

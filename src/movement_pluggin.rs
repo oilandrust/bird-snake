@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     game_constants_pluggin::*,
-    level::Level,
+    level_pluggin::LevelInstance,
     snake::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Snake, SnakePart, SpawnSnakeEvent,
     },
@@ -34,15 +34,15 @@ impl Plugin for MovementPluggin {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<SnakeMovedEvent>()
             .add_system(snake_movement_control_system)
-            .add_system(gravity_system.after(snake_movement_control_system))
+            .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
+            .add_system(gravity_system.after(grow_snake_on_move_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
             .add_system(respawn_snake_on_fall_system.after(gravity_system))
-            .add_system(grow_snake_on_move_system.after(gravity_system))
             .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
     }
 }
 
-fn min_distance_to_ground(level: &Level, snake: &Snake) -> i32 {
+fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
     snake
         .parts
         .iter()
@@ -55,7 +55,7 @@ type WithoutMoveOrFall = (Without<MoveCommand>, Without<GravityFall>);
 
 pub fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
-    level: Res<Level>,
+    level: Res<LevelInstance>,
     constants: Res<GameConstants>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
@@ -95,7 +95,7 @@ pub fn snake_movement_control_system(
     let new_position = snake.parts[0].0 + direction;
 
     // Check for collition with self.
-    if snake.occupies_position(new_position) || !level.is_empty(new_position) {
+    if snake.occupies_position(new_position) || !level.is_food_or_empty(new_position) {
         return;
     }
 
@@ -115,7 +115,7 @@ pub fn snake_movement_control_system(
 fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
-    level: Res<Level>,
+    level: Res<LevelInstance>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
 ) {

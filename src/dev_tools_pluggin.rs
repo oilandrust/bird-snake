@@ -4,7 +4,7 @@ use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::{
     game_constants_pluggin::{to_world, GameConstants, GRID_TO_WORLD_UNIT},
-    level::Level,
+    level::LevelTemplate,
     snake::Snake,
 };
 
@@ -43,7 +43,7 @@ fn toogle_dev_tools_system(
 
 fn debug_draw_grid_system(
     dev_tool_settings: Res<DevToolsSettings>,
-    level: Res<Level>,
+    level: Res<LevelTemplate>,
     mut lines: ResMut<DebugLines>,
 ) {
     if !dev_tool_settings.dev_tools_enabled {
