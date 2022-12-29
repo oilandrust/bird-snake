@@ -1,8 +1,9 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::plugin::InspectorWindows;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::{
-    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
+    game_constants_pluggin::{to_world, GameConstants, GRID_TO_WORLD_UNIT},
     level::Level,
     snake::Snake,
 };
@@ -29,11 +30,15 @@ impl Plugin for DevToolsPlugin {
 fn toogle_dev_tools_system(
     keyboard: Res<Input<KeyCode>>,
     mut dev_tool_settings: ResMut<DevToolsSettings>,
+    mut inspector_windows: ResMut<InspectorWindows>,
 ) {
     if keyboard.just_pressed(KeyCode::Tab) {
         let old_value = dev_tool_settings.dev_tools_enabled;
         dev_tool_settings.dev_tools_enabled = !old_value;
     }
+
+    inspector_windows.window_data_mut::<GameConstants>().visible =
+        dev_tool_settings.dev_tools_enabled;
 }
 
 fn debug_draw_grid_system(

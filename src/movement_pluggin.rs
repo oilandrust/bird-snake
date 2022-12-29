@@ -172,13 +172,13 @@ fn snake_smooth_movement_system(
 
 fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
-    mut sprite_query: Query<(&mut Transform, &mut Sprite, &SnakePart)>,
+    mut sprite_query: Query<(&mut Transform, &SnakePart)>,
 ) {
     let Ok((snake, move_command, gravity_fall)) = snake_query.get_single() else {
         return;
     };
 
-    for (mut transform, mut sprite, part) in sprite_query.iter_mut() {
+    for (mut transform, part) in sprite_query.iter_mut() {
         let mut part_position = to_world(snake.parts[part.0].0);
 
         // Move sprite with move anim.
@@ -190,13 +190,14 @@ fn update_sprite_positions_system(
             if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
                 let size_offset =
                     direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-                sprite.custom_size = Some(SNAKE_SIZE + size_offset.abs());
+                transform.scale =
+                    (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
                 part_position -= size_offset * 0.5;
             } else {
-                sprite.custom_size = Some(SNAKE_SIZE);
+                transform.scale = Vec3::ONE;
             }
         } else {
-            sprite.custom_size = Some(SNAKE_SIZE);
+            transform.scale = Vec3::ONE;
         }
 
         // Move sprite with gravity fall anim.

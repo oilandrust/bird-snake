@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::EguiPlugin;
+use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
 use level_pluggin::{LevelPluggin, StartLevelEvent};
@@ -28,7 +28,7 @@ fn main() {
             },
             ..default()
         }))
-        .add_plugin(EguiPlugin)
+        .add_plugin(TweeningPlugin)
         .add_plugin(GameConstantsPlugin)
         .add_plugin(DevToolsPlugin)
         .add_plugin(LevelPluggin)

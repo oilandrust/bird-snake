@@ -1,5 +1,4 @@
 Eat and grow:
-* Animation
 * Level unlock Condition
 
 End of level:

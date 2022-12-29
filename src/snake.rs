@@ -1,8 +1,9 @@
 use bevy::prelude::*;
+use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use std::collections::VecDeque;
 
 use crate::{
-    game_constants_pluggin::{to_world, SNAKE_SIZE},
+    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
     level::Level,
     level_pluggin::{Food, LevelEntity},
     movement_pluggin::{GravityFall, SnakeMovedEvent},
@@ -13,7 +14,7 @@ pub struct SnakePart(pub usize);
 
 #[derive(Bundle)]
 struct SnakePartBundle {
-    sprite_bundle: SpriteBundle,
+    spatial_bundle: SpatialBundle,
     part: SnakePart,
     level_entity: LevelEntity,
 }
@@ -21,12 +22,7 @@ struct SnakePartBundle {
 impl SnakePartBundle {
     fn new(position: IVec2, part_index: usize) -> Self {
         SnakePartBundle {
-            sprite_bundle: SpriteBundle {
-                sprite: Sprite {
-                    color: Color::GRAY,
-                    custom_size: Some(SNAKE_SIZE),
-                    ..default()
-                },
+            spatial_bundle: SpatialBundle {
                 transform: Transform {
                     translation: to_world(position).extend(0.0),
                     ..default()
@@ -36,6 +32,50 @@ impl SnakePartBundle {
             part: SnakePart(part_index),
             level_entity: LevelEntity,
         }
+    }
+}
+
+#[derive(Bundle)]
+struct SnakePartSpriteBundle {
+    sprite_bundle: SpriteBundle,
+    level_entity: LevelEntity,
+}
+
+impl SnakePartSpriteBundle {
+    fn new(scale: Vec2) -> Self {
+        SnakePartSpriteBundle {
+            sprite_bundle: SpriteBundle {
+                sprite: Sprite {
+                    color: Color::GRAY,
+                    custom_size: Some(SNAKE_SIZE),
+                    ..default()
+                },
+                transform: Transform {
+                    scale: scale.extend(1.0),
+                    ..default()
+                },
+                ..default()
+            },
+            level_entity: LevelEntity,
+        }
+    }
+}
+
+struct GrowPartLens {
+    scale_start: Vec2,
+    scale_end: Vec2,
+    grow_direction: Vec2,
+}
+
+impl Lens<Transform> for GrowPartLens {
+    fn lerp(&mut self, target: &mut Transform, ratio: f32) {
+        let value = self.scale_start + (self.scale_end - self.scale_start) * ratio;
+        target.scale = value.extend(1.0);
+
+        let mut offset = 0.5 * value * self.grow_direction - 0.5 * self.grow_direction;
+        offset *= GRID_TO_WORLD_UNIT;
+        let z = target.translation.z;
+        target.translation = (offset).extend(z);
     }
 }
 
@@ -95,7 +135,11 @@ pub fn spawn_snake_system(
     }
 
     for (index, part) in level.initial_snake.iter().enumerate() {
-        commands.spawn(SnakePartBundle::new(part.0, index));
+        commands
+            .spawn(SnakePartBundle::new(part.0, index))
+            .with_children(|parent| {
+                parent.spawn(SnakePartSpriteBundle::new(Vec2::ONE));
+            });
     }
 
     commands
@@ -148,6 +192,22 @@ pub fn grow_snake_on_move_system(
         let new_part_position = snake.tail_position() - tail_direction;
         snake.parts.push_back((new_part_position, tail_direction));
 
-        commands.spawn(SnakePartBundle::new(new_part_position, snake.len() - 1));
+        let grow_tween = Tween::new(
+            EaseFunction::QuadraticInOut,
+            std::time::Duration::from_secs_f32(0.2),
+            GrowPartLens {
+                scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
+                scale_end: Vec2::ONE,
+                grow_direction: -tail_direction.as_vec2(),
+            },
+        );
+
+        commands
+            .spawn(SnakePartBundle::new(new_part_position, snake.len() - 1))
+            .with_children(|parent| {
+                parent
+                    .spawn(SnakePartSpriteBundle::new(Vec2::ZERO))
+                    .insert(Animator::new(grow_tween));
+            });
     }
 }
