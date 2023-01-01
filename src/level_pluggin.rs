@@ -2,7 +2,7 @@ use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
-    level::{Cell, LevelTemplate, LEVELS},
+    level_template::{Cell, LevelTemplate, LEVELS},
     movement_pluggin::snake_movement_control_system,
     snake::{spawn_snake_system, Snake, SpawnSnakeEvent},
 };

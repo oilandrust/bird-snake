@@ -4,8 +4,8 @@ use std::collections::VecDeque;
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
-    level::LevelTemplate,
     level_pluggin::{Food, LevelEntity, LevelInstance},
+    level_template::LevelTemplate,
     movement_pluggin::{GravityFall, SnakeMovedEvent},
 };
 

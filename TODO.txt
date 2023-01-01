@@ -1,5 +1,12 @@
 Eat and grow:
 * Level unlock Condition
+* Eat on jump
+
+Level 4
+
+Controls:
+* Reset level
+* undo move
 
 End of level:
 * animation

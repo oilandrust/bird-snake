@@ -1,9 +1,11 @@
-use anyhow::Result;
+use std::iter::once;
+
+use anyhow::{bail, Result};
 use bevy::{prelude::*, utils::HashSet};
 use game_grid::*;
 use thiserror::Error;
 
-const LEVEL_0: &str = "....................
+const LEVEL_1: &str = "....................
 .............######.
 .............####...
 ..............##....
@@ -16,7 +18,7 @@ const LEVEL_0: &str = "....................
 ####################
 ####################";
 
-const LEVEL_1: &str = "............
+const LEVEL_2: &str = "............
 ................
 ..X.............
 ............... 
@@ -29,7 +31,7 @@ const LEVEL_1: &str = "............
 ..#############
 ..#############";
 
-const LEVEL_2: &str = "............
+const LEVEL_3: &str = "............
 ...............
 ...............
 ..a@........... 
@@ -39,65 +41,39 @@ const LEVEL_2: &str = "............
 .....######.... 
 ......######...";
 
-const EAT_GYM: &str = "....................
-.............######.
-...X...o..oo.......
-..........#.......
-.........##.........
-...aa@.o.o.o.o.
-..#################.
-.###################
-####################
-####################";
+const LEVEL_4: &str = "............
+......X.....
+............
+....#o#.....
+..............
+......@a.....
+....####..o...
+...#########.
+..#####..####..
+..####...####..";
 
-pub const LEVELS: [&str; 3] = [LEVEL_0, LEVEL_1, LEVEL_2];
+pub const LEVELS: [&str; 4] = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(GridCell, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum Cell {
+    #[cell('#')]
     Wall,
+
+    #[cell(' '|'.')]
+    #[default]
     Empty,
+
+    #[cell('@')]
     SnakeHead,
+
+    #[cell('a')]
     SnakePart,
+
+    #[cell('o')]
     Food,
+
+    #[cell('X')]
     Goal,
-}
-
-impl GridCell for Cell {
-    const EMPTY: Self = Cell::Empty;
-}
-
-impl From<Cell> for char {
-    fn from(cell: Cell) -> char {
-        match cell {
-            Cell::Wall => '#',
-            Cell::Empty => ' ',
-            Cell::SnakeHead => '@',
-            Cell::SnakePart => 'a',
-            Cell::Food => 'o',
-            Cell::Goal => 'X',
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-#[error("Invalid character '{0}'")]
-pub struct ParseCellError(char);
-
-impl TryFrom<char> for Cell {
-    type Error = ParseCellError;
-
-    fn try_from(value: char) -> Result<Self, Self::Error> {
-        match value {
-            '#' => Ok(Cell::Wall),
-            ' ' => Ok(Cell::Empty),
-            '.' => Ok(Cell::Empty),
-            '@' => Ok(Cell::SnakeHead),
-            'a' => Ok(Cell::SnakePart),
-            'o' => Ok(Cell::Food),
-            'X' => Ok(Cell::Goal),
-            _ => Err(ParseCellError(value)),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Resource)]
@@ -115,6 +91,9 @@ enum ParseLevelError {
 
     #[error("Missing snake head start position '@'.")]
     MissingSnakeHead,
+
+    #[error("Snake should be of length at least 2.")]
+    InvalidSnake,
 }
 
 impl LevelTemplate {
@@ -156,6 +135,10 @@ impl LevelTemplate {
             }
         }
 
+        if parts.len() < 2 {
+            bail!(ParseLevelError::InvalidSnake);
+        }
+
         // Find the goal position.
         let goal_index = grid
             .cells()
@@ -182,11 +165,17 @@ impl LevelTemplate {
             grid.set_cell(*position, Cell::Empty);
         }
 
-        // TODO: Infer direction from parts!
+        // Infer parts direction from previous part.
+        let directions = parts
+            .iter()
+            .zip(parts.iter().skip(1))
+            .map(|(position, prev_position)| *position - *prev_position)
+            .chain(once(parts[parts.len() - 2] - parts[parts.len() - 1]));
+
         Ok(LevelTemplate {
             grid,
             goal_position,
-            initial_snake: parts.iter().map(|part| (*part, IVec2::X)).collect(),
+            initial_snake: parts.iter().copied().zip(directions).collect(),
             food_positions,
         })
     }

@@ -7,8 +7,8 @@ use movement_pluggin::MovementPluggin;
 
 mod dev_tools_pluggin;
 mod game_constants_pluggin;
-mod level;
 mod level_pluggin;
+mod level_template;
 mod movement_pluggin;
 mod snake;
 

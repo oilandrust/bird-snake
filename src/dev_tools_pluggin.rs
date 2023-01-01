@@ -4,7 +4,7 @@ use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::{
     game_constants_pluggin::{to_world, GameConstants, GRID_TO_WORLD_UNIT},
-    level::LevelTemplate,
+    level_template::LevelTemplate,
     snake::Snake,
 };
 
