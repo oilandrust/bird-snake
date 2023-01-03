@@ -25,6 +25,12 @@ pub struct GravityFall {
     relative_y: f32,
 }
 
+#[derive(Resource, Default)]
+pub struct SnakeHistory {
+    pub move_history: Vec<IVec2>,
+    pub last_valid_position: Vec<(IVec2, IVec2)>,
+}
+
 pub struct MovementPluggin;
 
 pub struct SnakeMovedEvent;
@@ -57,6 +63,7 @@ pub fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
     level: Res<LevelInstance>,
     constants: Res<GameConstants>,
+    mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut query: Query<(Entity, &mut Snake), WithoutMoveOrFall>,
@@ -66,13 +73,13 @@ pub fn snake_movement_control_system(
     };
 
     // TODO: Use last pressed instead of any pressed.
-    let new_direction = if keyboard.any_pressed(MOVE_UP_KEYS) {
+    let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
         Some(IVec2::Y)
-    } else if keyboard.any_pressed(MOVE_LEFT_KEYS) {
+    } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
         Some(IVec2::NEG_X)
-    } else if keyboard.any_pressed(MOVE_DOWN_KEYS) {
+    } else if keyboard.any_just_pressed(MOVE_DOWN_KEYS) {
         Some(IVec2::NEG_Y)
-    } else if keyboard.any_pressed(MOVE_RIGHT_KEYS) {
+    } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
         Some(IVec2::X)
     } else {
         None
@@ -82,9 +89,10 @@ pub fn snake_movement_control_system(
         return;
     };
 
+    let new_position = snake.parts[0].0 + direction;
+
     // Check that we have enough parts to go up.
-    // TODO_MAYBE: This could be done with a move up then fall.
-    if direction == IVec2::Y && snake.is_standing() {
+    if direction == IVec2::Y && snake.is_standing() && !level.is_food(new_position) {
         commands.entity(snake_entity).insert(GravityFall {
             velocity: constants.jump_velocity,
             relative_y: 0.0,
@@ -92,12 +100,12 @@ pub fn snake_movement_control_system(
         return;
     }
 
-    let new_position = snake.parts[0].0 + direction;
-
     // Check for collition with self.
     if snake.occupies_position(new_position) || !level.is_food_or_empty(new_position) {
         return;
     }
+
+    snake_history.last_valid_position = snake.parts.iter().copied().collect();
 
     // Finaly move the snake forward.
     snake.parts.push_front((new_position, direction));

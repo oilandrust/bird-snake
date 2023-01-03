@@ -52,7 +52,7 @@ const LEVEL_4: &str = "............
 ..#####..####..
 ..####...####..";
 
-pub const LEVELS: [&str; 4] = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4];
+pub const LEVELS: [&str; 4] = [LEVEL_4, LEVEL_2, LEVEL_3, LEVEL_4];
 
 #[derive(GridCell, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum Cell {

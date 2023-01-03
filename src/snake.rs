@@ -6,7 +6,7 @@ use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance},
     level_template::LevelTemplate,
-    movement_pluggin::{GravityFall, SnakeMovedEvent},
+    movement_pluggin::{GravityFall, SnakeHistory, SnakeMovedEvent},
 };
 
 #[derive(Component)]
@@ -123,6 +123,10 @@ impl Snake {
             *position += IVec2::NEG_Y;
         }
     }
+
+    pub fn set_position(&mut self, position: Vec<(IVec2, IVec2)>) {
+        self.parts = VecDeque::from(position);
+    }
 }
 
 pub fn spawn_snake_system(
@@ -148,23 +152,20 @@ pub fn spawn_snake_system(
 }
 
 pub fn respawn_snake_on_fall_system(
-    mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
+    snake_history: Res<SnakeHistory>,
     mut commands: Commands,
-    snake_query: Query<(Entity, &Snake), With<GravityFall>>,
-    parts_query: Query<Entity, With<SnakePart>>,
+    mut snake_query: Query<(Entity, &mut Snake), With<GravityFall>>,
 ) {
-    let Ok((snake_entity, snake)) = snake_query.get_single() else {
+    let Ok((snake_entity, mut snake)) = snake_query.get_single_mut() else {
         return;
     };
 
-    if snake.head_position().y < -2 {
-        spawn_snake_event.send(SpawnSnakeEvent);
-
-        commands.entity(snake_entity).despawn();
-        for snake_part_entity in &parts_query {
-            commands.entity(snake_part_entity).despawn_recursive();
-        }
+    if snake.head_position().y >= -2 {
+        return;
     }
+
+    snake.set_position(snake_history.last_valid_position.clone());
+    commands.entity(snake_entity).remove::<GravityFall>();
 }
 
 pub fn grow_snake_on_move_system(

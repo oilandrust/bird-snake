@@ -3,7 +3,7 @@ use bevy::{app::AppExit, prelude::*, utils::HashMap};
 use crate::{
     game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
     level_template::{Cell, LevelTemplate, LEVELS},
-    movement_pluggin::snake_movement_control_system,
+    movement_pluggin::{snake_movement_control_system, SnakeHistory},
     snake::{spawn_snake_system, Snake, SpawnSnakeEvent},
 };
 
@@ -44,6 +44,13 @@ impl LevelInstance {
 
     pub fn set_empty(&mut self, position: IVec2) {
         self.walkable_positions.remove(&position);
+    }
+
+    pub fn is_food(&self, position: IVec2) -> bool {
+        match self.walkable_positions.get(&position) {
+            Some(Walkable::Food) => true,
+            _ => true,
+        }
     }
 
     pub fn is_food_or_empty(&self, position: IVec2) -> bool {
@@ -104,6 +111,11 @@ fn load_level_system(
 
     let next_level_index = event.0;
     let level = LevelTemplate::parse(LEVELS[next_level_index]).unwrap();
+
+    commands.insert_resource(SnakeHistory {
+        last_valid_position: level.initial_snake.clone(),
+        ..default()
+    });
 
     commands.insert_resource(level);
     commands.insert_resource(LevelInstance::new());
@@ -213,6 +225,7 @@ pub fn clear_level_system(
     }
 
     commands.remove_resource::<LevelInstance>();
+    commands.remove_resource::<SnakeHistory>();
 }
 
 pub fn check_for_level_completion_system(
