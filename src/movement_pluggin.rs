@@ -19,16 +19,51 @@ pub struct MoveCommand {
     anim_offset: f32,
 }
 
-#[derive(Component)]
+#[derive(Component, Copy, Clone)]
 pub struct GravityFall {
     velocity: f32,
     relative_y: f32,
+    pub grid_distance: i32,
+}
+
+pub enum MoveHistoryEvent {
+    Move((IVec2, IVec2)),
+    Fall(i32),
 }
 
 #[derive(Resource, Default)]
 pub struct SnakeHistory {
-    pub move_history: Vec<IVec2>,
-    pub last_valid_position: Vec<(IVec2, IVec2)>,
+    move_history: Vec<MoveHistoryEvent>,
+}
+
+impl SnakeHistory {
+    pub fn push(&mut self, event: MoveHistoryEvent) {
+        self.move_history.push(event);
+    }
+
+    pub fn undo_last(&mut self, snake: &mut Snake) {
+        match self.move_history.last().unwrap() {
+            MoveHistoryEvent::Move(part) => {
+                snake.parts.push_back(*part);
+                snake.parts.pop_front();
+            }
+            MoveHistoryEvent::Fall(fall_distance) => {
+                snake.move_up(*fall_distance);
+                self.move_history.pop();
+
+                // If a fall history happens, it must be preceded by a move, undo that as well.
+                assert!(!self.move_history.is_empty());
+                if let MoveHistoryEvent::Move(part) = self.move_history.last().unwrap() {
+                    snake.parts.push_back(*part);
+                    snake.parts.pop_front();
+                } else {
+                    panic!("Fall history should always happen after a move history.")
+                }
+            }
+        }
+
+        self.move_history.pop();
+    }
 }
 
 pub struct MovementPluggin;
@@ -39,7 +74,8 @@ impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<SnakeMovedEvent>()
-            .add_system(snake_movement_control_system)
+            .add_system(snake_movement_undo_system)
+            .add_system(snake_movement_control_system.after(snake_movement_undo_system))
             .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
             .add_system(gravity_system.after(grow_snake_on_move_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
@@ -72,7 +108,6 @@ pub fn snake_movement_control_system(
         return;
     };
 
-    // TODO: Use last pressed instead of any pressed.
     let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
         Some(IVec2::Y)
     } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
@@ -96,6 +131,7 @@ pub fn snake_movement_control_system(
         commands.entity(snake_entity).insert(GravityFall {
             velocity: constants.jump_velocity,
             relative_y: 0.0,
+            grid_distance: 0,
         });
         return;
     }
@@ -105,7 +141,7 @@ pub fn snake_movement_control_system(
         return;
     }
 
-    snake_history.last_valid_position = snake.parts.iter().copied().collect();
+    snake_history.push(MoveHistoryEvent::Move(*snake.parts.back().unwrap()));
 
     // Finaly move the snake forward.
     snake.parts.push_front((new_position, direction));
@@ -120,10 +156,31 @@ pub fn snake_movement_control_system(
     });
 }
 
+pub fn snake_movement_undo_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut snake_history: ResMut<SnakeHistory>,
+    mut query: Query<&mut Snake>,
+) {
+    let Ok(mut snake) = query.get_single_mut() else {
+        return;
+    };
+
+    if !keyboard.just_pressed(KeyCode::Back) {
+        return;
+    }
+
+    if snake_history.move_history.is_empty() {
+        return;
+    }
+
+    snake_history.undo_last(&mut snake);
+}
+
 fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
     level: Res<LevelInstance>,
+    mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
 ) {
@@ -141,11 +198,14 @@ fn gravity_system(
                 // keep falling..
                 if min_distance_to_ground(&level, &snake) > 1 {
                     gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
+                    gravity_fall.grid_distance += 1;
 
                     snake.fall_one_unit();
                 } else {
                     // ..or stop falling animation.
                     commands.entity(snake_entity).remove::<GravityFall>();
+
+                    snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
                 }
             }
         }
@@ -155,6 +215,7 @@ fn gravity_system(
                 commands.entity(snake_entity).insert(GravityFall {
                     velocity: 0.0,
                     relative_y: GRID_TO_WORLD_UNIT,
+                    grid_distance: 1,
                 });
 
                 snake.fall_one_unit();

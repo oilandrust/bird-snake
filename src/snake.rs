@@ -6,7 +6,7 @@ use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance},
     level_template::LevelTemplate,
-    movement_pluggin::{GravityFall, SnakeHistory, SnakeMovedEvent},
+    movement_pluggin::{GravityFall, MoveHistoryEvent, SnakeHistory, SnakeMovedEvent},
 };
 
 #[derive(Component)]
@@ -124,8 +124,10 @@ impl Snake {
         }
     }
 
-    pub fn set_position(&mut self, position: Vec<(IVec2, IVec2)>) {
-        self.parts = VecDeque::from(position);
+    pub fn move_up(&mut self, distance: i32) {
+        for (position, _) in self.parts.iter_mut() {
+            *position += IVec2::Y * distance;
+        }
     }
 }
 
@@ -152,11 +154,11 @@ pub fn spawn_snake_system(
 }
 
 pub fn respawn_snake_on_fall_system(
-    snake_history: Res<SnakeHistory>,
+    mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
-    mut snake_query: Query<(Entity, &mut Snake), With<GravityFall>>,
+    mut snake_query: Query<(Entity, &mut Snake, &GravityFall)>,
 ) {
-    let Ok((snake_entity, mut snake)) = snake_query.get_single_mut() else {
+    let Ok((snake_entity, mut snake, &gravity_fall)) = snake_query.get_single_mut() else {
         return;
     };
 
@@ -164,7 +166,9 @@ pub fn respawn_snake_on_fall_system(
         return;
     }
 
-    snake.set_position(snake_history.last_valid_position.clone());
+    snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
+    snake_history.undo_last(&mut snake);
+
     commands.entity(snake_entity).remove::<GravityFall>();
 }
 

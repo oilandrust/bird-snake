@@ -112,10 +112,7 @@ fn load_level_system(
     let next_level_index = event.0;
     let level = LevelTemplate::parse(LEVELS[next_level_index]).unwrap();
 
-    commands.insert_resource(SnakeHistory {
-        last_valid_position: level.initial_snake.clone(),
-        ..default()
-    });
+    commands.insert_resource(SnakeHistory::default());
 
     commands.insert_resource(level);
     commands.insert_resource(LevelInstance::new());
