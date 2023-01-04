@@ -4,13 +4,15 @@ use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
 use level_pluggin::{LevelPluggin, StartLevelEvent};
 use movement_pluggin::MovementPluggin;
+use snake_pluggin::SnakePluggin;
 
 mod dev_tools_pluggin;
 mod game_constants_pluggin;
 mod level_pluggin;
 mod level_template;
+mod levels;
 mod movement_pluggin;
-mod snake;
+mod snake_pluggin;
 
 fn start_game(mut event_writer: EventWriter<StartLevelEvent>) {
     event_writer.send(StartLevelEvent(0));
@@ -31,6 +33,7 @@ fn main() {
         .add_plugin(TweeningPlugin)
         .add_plugin(GameConstantsPlugin)
         .add_plugin(DevToolsPlugin)
+        .add_plugin(SnakePluggin)
         .add_plugin(LevelPluggin)
         .add_plugin(MovementPluggin)
         .add_startup_system(start_game)

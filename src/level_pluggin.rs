@@ -2,9 +2,10 @@ use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
-    level_template::{Cell, LevelTemplate, LEVELS},
+    level_template::{Cell, LevelTemplate},
+    levels::LEVELS,
     movement_pluggin::{snake_movement_control_system, SnakeHistory},
-    snake::{spawn_snake_system, Snake, SpawnSnakeEvent},
+    snake_pluggin::{Snake, SpawnSnakeEvent},
 };
 
 pub struct StartLevelEvent(pub usize);
@@ -94,7 +95,6 @@ impl Plugin for LevelPluggin {
             )
             .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_system)
             .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
-            .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system(check_for_level_completion_system.after(snake_movement_control_system))
             .add_system_to_stage(CoreStage::Last, clear_level_system);
     }
@@ -159,25 +159,7 @@ fn spawn_level_entities_system(
 
     // Spawn the food sprites.
     for position in &level_template.food_positions {
-        commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    color: Color::ORANGE,
-                    custom_size: Some(GRID_CELL_SIZE),
-                    ..default()
-                },
-                transform: Transform {
-                    translation: to_world(*position).extend(0.0),
-                    ..default()
-                },
-                ..default()
-            })
-            .insert(Food(*position))
-            .insert(LevelEntity);
-
-        level_instance
-            .walkable_positions
-            .insert(*position, Walkable::Food);
+        spawn_food(&mut commands, position, &mut level_instance);
     }
 
     // Spawn level goal sprite.
@@ -206,6 +188,27 @@ fn spawn_level_entities_system(
             ..default()
         })
         .insert(LevelEntity);
+}
+
+pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                color: Color::ORANGE,
+                custom_size: Some(GRID_CELL_SIZE),
+                ..default()
+            },
+            transform: Transform {
+                translation: to_world(*position).extend(0.0),
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Food(*position))
+        .insert(LevelEntity);
+    level_instance
+        .walkable_positions
+        .insert(*position, Walkable::Food);
 }
 
 pub fn clear_level_system(

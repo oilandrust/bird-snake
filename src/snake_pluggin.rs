@@ -6,8 +6,26 @@ use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance},
     level_template::LevelTemplate,
-    movement_pluggin::{GravityFall, MoveHistoryEvent, SnakeHistory, SnakeMovedEvent},
+    movement_pluggin::{
+        update_sprite_positions_system, GravityFall, MoveHistoryEvent, SnakeHistory,
+        SnakeMovedEvent,
+    },
 };
+
+pub struct SnakePluggin;
+
+impl Plugin for SnakePluggin {
+    fn build(&self, app: &mut App) {
+        app.add_event::<DespawnSnakePartEvent>()
+            .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_part.after(update_sprite_positions_system),
+            );
+    }
+}
+
+pub struct DespawnSnakePartEvent(pub usize);
 
 #[derive(Component)]
 pub struct SnakePart(pub usize);
@@ -155,7 +173,9 @@ pub fn spawn_snake_system(
 
 pub fn respawn_snake_on_fall_system(
     mut snake_history: ResMut<SnakeHistory>,
+    mut level_instance: ResMut<LevelInstance>,
     mut commands: Commands,
+    mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
     mut snake_query: Query<(Entity, &mut Snake, &GravityFall)>,
 ) {
     let Ok((snake_entity, mut snake, &gravity_fall)) = snake_query.get_single_mut() else {
@@ -167,7 +187,12 @@ pub fn respawn_snake_on_fall_system(
     }
 
     snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
-    snake_history.undo_last(&mut snake);
+    snake_history.undo_last(
+        &mut snake,
+        &mut level_instance,
+        &mut commands,
+        &mut despawn_snake_part_event,
+    );
 
     commands.entity(snake_entity).remove::<GravityFall>();
 }
@@ -176,6 +201,7 @@ pub fn grow_snake_on_move_system(
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
     mut commands: Commands,
     mut level: ResMut<LevelInstance>,
+    mut snake_history: ResMut<SnakeHistory>,
     mut snake_query: Query<&mut Snake>,
     foods_query: Query<(Entity, &Food), With<Food>>,
 ) {
@@ -200,6 +226,8 @@ pub fn grow_snake_on_move_system(
         let new_part_position = snake.tail_position() - tail_direction;
         snake.parts.push_back((new_part_position, tail_direction));
 
+        snake_history.push(MoveHistoryEvent::Eat(food.0));
+
         let grow_tween = Tween::new(
             EaseFunction::QuadraticInOut,
             std::time::Duration::from_secs_f32(0.2),
@@ -217,5 +245,21 @@ pub fn grow_snake_on_move_system(
                     .spawn(SnakePartSpriteBundle::new(Vec2::ZERO))
                     .insert(Animator::new(grow_tween));
             });
+    }
+}
+
+fn despawn_snake_part(
+    mut despawn_snake_part_event: EventReader<DespawnSnakePartEvent>,
+    mut commands: Commands,
+    mut snake_query: Query<&mut Snake>,
+    parts_query: Query<(Entity, &SnakePart)>,
+) {
+    for message in despawn_snake_part_event.iter() {
+        for (entity, part) in parts_query.iter() {
+            if part.0 == message.0 {
+                commands.entity(entity).despawn_recursive();
+                snake_query.single_mut().parts.pop_back();
+            }
+        }
     }
 }

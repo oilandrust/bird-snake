@@ -2,9 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     game_constants_pluggin::*,
-    level_pluggin::LevelInstance,
-    snake::{
-        grow_snake_on_move_system, respawn_snake_on_fall_system, Snake, SnakePart, SpawnSnakeEvent,
+    level_pluggin::{spawn_food, LevelInstance},
+    snake_pluggin::{
+        grow_snake_on_move_system, respawn_snake_on_fall_system, DespawnSnakePartEvent, Snake,
+        SnakePart, SpawnSnakeEvent,
     },
 };
 
@@ -26,9 +27,11 @@ pub struct GravityFall {
     pub grid_distance: i32,
 }
 
+#[derive(Copy, Clone)]
 pub enum MoveHistoryEvent {
     Move((IVec2, IVec2)),
     Fall(i32),
+    Eat(IVec2),
 }
 
 #[derive(Resource, Default)]
@@ -41,28 +44,50 @@ impl SnakeHistory {
         self.move_history.push(event);
     }
 
-    pub fn undo_last(&mut self, snake: &mut Snake) {
-        match self.move_history.last().unwrap() {
+    pub fn undo_last(
+        &mut self,
+        snake: &mut Snake,
+        level: &mut LevelInstance,
+        commands: &mut Commands,
+        despawn_snake_part_event: &mut EventWriter<DespawnSnakePartEvent>,
+    ) {
+        let top = *self.move_history.last().unwrap();
+        match top {
             MoveHistoryEvent::Move(part) => {
-                snake.parts.push_back(*part);
+                snake.parts.push_back(part);
                 snake.parts.pop_front();
+                self.move_history.pop();
             }
             MoveHistoryEvent::Fall(fall_distance) => {
-                snake.move_up(*fall_distance);
+                snake.move_up(fall_distance);
                 self.move_history.pop();
 
                 // If a fall history happens, it must be preceded by a move, undo that as well.
-                assert!(!self.move_history.is_empty());
-                if let MoveHistoryEvent::Move(part) = self.move_history.last().unwrap() {
-                    snake.parts.push_back(*part);
-                    snake.parts.pop_front();
-                } else {
-                    panic!("Fall history should always happen after a move history.")
-                }
+                self.expect_and_undo_move(snake);
+            }
+            MoveHistoryEvent::Eat(position) => {
+                despawn_snake_part_event.send(DespawnSnakePartEvent(snake.parts.len() - 1));
+
+                spawn_food(commands, &position, level);
+
+                self.move_history.pop();
+
+                // If a eat history happens, it must be preceded by a move, undo that as well.
+                self.expect_and_undo_move(snake);
             }
         }
+    }
 
-        self.move_history.pop();
+    fn expect_and_undo_move(&mut self, snake: &mut Snake) {
+        assert!(!self.move_history.is_empty());
+        if let MoveHistoryEvent::Move(part) = self.move_history.last().unwrap() {
+            snake.parts.push_back(*part);
+            snake.parts.pop_front();
+
+            self.move_history.pop();
+        } else {
+            panic!("Fall history should always happen after a move history.")
+        }
     }
 }
 
@@ -159,12 +184,11 @@ pub fn snake_movement_control_system(
 pub fn snake_movement_undo_system(
     keyboard: Res<Input<KeyCode>>,
     mut snake_history: ResMut<SnakeHistory>,
+    mut level: ResMut<LevelInstance>,
+    mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
+    mut commands: Commands,
     mut query: Query<&mut Snake>,
 ) {
-    let Ok(mut snake) = query.get_single_mut() else {
-        return;
-    };
-
     if !keyboard.just_pressed(KeyCode::Back) {
         return;
     }
@@ -173,7 +197,16 @@ pub fn snake_movement_undo_system(
         return;
     }
 
-    snake_history.undo_last(&mut snake);
+    let Ok(mut snake) = query.get_single_mut() else {
+        return;
+    };
+
+    snake_history.undo_last(
+        &mut snake,
+        &mut level,
+        &mut commands,
+        &mut despawn_snake_part_event,
+    );
 }
 
 fn gravity_system(
@@ -239,7 +272,7 @@ fn snake_smooth_movement_system(
     }
 }
 
-fn update_sprite_positions_system(
+pub fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
     mut sprite_query: Query<(&mut Transform, &SnakePart)>,
 ) {
