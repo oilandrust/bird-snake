@@ -158,7 +158,7 @@ pub fn spawn_snake_system(
         return;
     }
 
-    for (index, part) in level.initial_snake.iter().enumerate() {
+    for (index, part) in level.initial_snakes.first().unwrap().iter().enumerate() {
         commands
             .spawn(SnakePartBundle::new(part.0, index))
             .with_children(|parent| {
@@ -167,7 +167,9 @@ pub fn spawn_snake_system(
     }
 
     commands
-        .spawn(Snake::from_parts(level.initial_snake.clone()))
+        .spawn(Snake::from_parts(
+            level.initial_snakes.first().unwrap().clone(),
+        ))
         .insert(LevelEntity);
 }
 
