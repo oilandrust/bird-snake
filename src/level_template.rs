@@ -125,6 +125,13 @@ impl LevelTemplate {
             .map(|(start_head_index, _)| extract_snake_template(&grid, start_head_index))
             .collect::<Result<Vec<SnakeTemplate>>>()?;
 
+        // Set the cells where the snakes are as empty, they are managed as part of the game state.
+        for snake in &snakes {
+            for part in snake {
+                grid.set_cell(part.0, Cell::Empty);
+            }
+        }
+
         // Find the goal position.
         let goal_index = grid
             .cells()
@@ -132,13 +139,6 @@ impl LevelTemplate {
             .ok_or(ParseLevelError::MissingLevelGoal)?;
 
         let goal_position = grid.position_for_index(goal_index);
-
-        // Set the cells where the player and goal are as empty, they are managed as part of the game state.
-        for snake in &snakes {
-            for part in snake {
-                grid.set_cell(part.0, Cell::Empty);
-            }
-        }
 
         grid.set_cell(goal_position, Cell::Empty);
 
