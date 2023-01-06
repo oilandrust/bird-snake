@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-
-use bevy_inspector_egui::{Inspectable, InspectorPlugin};
+use bevy_inspector_egui::{prelude::*, quick::ResourceInspectorPlugin};
 
 pub const GRID_TO_WORLD_UNIT: f32 = 25.;
 pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
@@ -14,15 +13,16 @@ pub fn to_world(position: IVec2) -> Vec2 {
     (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
 }
 
-#[derive(Resource, Inspectable)]
+#[derive(Resource, Reflect, InspectorOptions)]
+#[reflect(InspectorOptions)]
 pub struct GameConstants {
-    #[inspectable(min = 0.0, max = 10.0)]
+    #[inspector(min = 0.0, max = 10.0)]
     pub move_velocity: f32,
 
-    #[inspectable(min = 0.0, max = 300.0)]
+    #[inspector(min = 0.0, max = 300.0)]
     pub jump_velocity: f32,
 
-    #[inspectable(min = 0.0, max = 900.0)]
+    #[inspector(min = 0.0, max = 900.0)]
     pub gravity: f32,
 }
 
@@ -39,6 +39,8 @@ pub struct GameConstantsPlugin;
 
 impl Plugin for GameConstantsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(InspectorPlugin::<GameConstants>::new());
+        app.add_plugin(ResourceInspectorPlugin::<GameConstants>::new());
+        app.register_type::<GameConstants>();
+        app.insert_resource(GameConstants::default());
     }
 }

@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
@@ -31,6 +32,7 @@ fn main() {
             ..default()
         }))
         .add_plugin(TweeningPlugin)
+        //.add_plugin(WorldInspectorPlugin)
         .add_plugin(GameConstantsPlugin)
         .add_plugin(DevToolsPlugin)
         .add_plugin(SnakePluggin)

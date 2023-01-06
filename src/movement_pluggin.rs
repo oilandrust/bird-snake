@@ -1,11 +1,13 @@
+use core::panic;
+
 use bevy::prelude::*;
 
 use crate::{
     game_constants_pluggin::*,
     level_pluggin::{spawn_food, LevelInstance},
     snake_pluggin::{
-        grow_snake_on_move_system, respawn_snake_on_fall_system, DespawnSnakePartEvent, Snake,
-        SnakePart, SpawnSnakeEvent,
+        grow_snake_on_move_system, respawn_snake_on_fall_system, DespawnSnakePartEvent,
+        SelectedSnake, Snake, SnakePart, SpawnSnakeEvent,
     },
 };
 
@@ -66,7 +68,10 @@ impl SnakeHistory {
                 self.expect_and_undo_move(snake);
             }
             MoveHistoryEvent::Eat(position) => {
-                despawn_snake_part_event.send(DespawnSnakePartEvent(snake.parts.len() - 1));
+                despawn_snake_part_event.send(DespawnSnakePartEvent(SnakePart {
+                    snake_index: snake.index,
+                    part_index: snake.parts.len() - 1,
+                }));
 
                 spawn_food(commands, &position, level);
 
@@ -118,7 +123,11 @@ fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
         .unwrap()
 }
 
-type WithoutMoveOrFall = (Without<MoveCommand>, Without<GravityFall>);
+type WithMovementControlSystemFilter = (
+    With<SelectedSnake>,
+    Without<MoveCommand>,
+    Without<GravityFall>,
+);
 
 pub fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
@@ -127,7 +136,7 @@ pub fn snake_movement_control_system(
     mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
-    mut query: Query<(Entity, &mut Snake), WithoutMoveOrFall>,
+    mut query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
 ) {
     let Ok((snake_entity, mut snake)) = query.get_single_mut() else {
         return;
@@ -217,41 +226,39 @@ fn gravity_system(
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
 ) {
-    let Ok((snake_entity, mut snake, gravity_fall)) = query.get_single_mut() else {
-        return;
-    };
+    for (snake_entity, mut snake, gravity_fall) in query.iter_mut() {
+        match gravity_fall {
+            Some(mut gravity_fall) => {
+                gravity_fall.velocity -= constants.gravity * time.delta_seconds();
+                gravity_fall.relative_y += gravity_fall.velocity * time.delta_seconds();
 
-    match gravity_fall {
-        Some(mut gravity_fall) => {
-            gravity_fall.velocity -= constants.gravity * time.delta_seconds();
-            gravity_fall.relative_y += gravity_fall.velocity * time.delta_seconds();
+                // When relative y is 0, the sprites are aligned with the actual position.
+                if gravity_fall.relative_y < 0.0 {
+                    // keep falling..
+                    if min_distance_to_ground(&level, &snake) > 1 {
+                        gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
+                        gravity_fall.grid_distance += 1;
 
-            // When relative y is 0, the sprites are aligned with the actual position.
-            if gravity_fall.relative_y < 0.0 {
-                // keep falling..
-                if min_distance_to_ground(&level, &snake) > 1 {
-                    gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
-                    gravity_fall.grid_distance += 1;
+                        snake.fall_one_unit();
+                    } else {
+                        // ..or stop falling animation.
+                        commands.entity(snake_entity).remove::<GravityFall>();
 
-                    snake.fall_one_unit();
-                } else {
-                    // ..or stop falling animation.
-                    commands.entity(snake_entity).remove::<GravityFall>();
-
-                    snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
+                        snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
+                    }
                 }
             }
-        }
-        None => {
-            // Check if snake is on the ground and spawn gravity fall if not.
-            if min_distance_to_ground(&level, &snake) > 1 {
-                commands.entity(snake_entity).insert(GravityFall {
-                    velocity: 0.0,
-                    relative_y: GRID_TO_WORLD_UNIT,
-                    grid_distance: 1,
-                });
+            None => {
+                // Check if snake is on the ground and spawn gravity fall if not.
+                if min_distance_to_ground(&level, &snake) > 1 {
+                    commands.entity(snake_entity).insert(GravityFall {
+                        velocity: 0.0,
+                        relative_y: GRID_TO_WORLD_UNIT,
+                        grid_distance: 1,
+                    });
 
-                snake.fall_one_unit();
+                    snake.fall_one_unit();
+                }
             }
         }
     }
@@ -262,13 +269,11 @@ fn snake_smooth_movement_system(
     mut commands: Commands,
     mut query: Query<(Entity, &mut MoveCommand)>,
 ) {
-    let Ok((entity, mut move_command)) = query.get_single_mut() else {
-        return;
-    };
-
-    move_command.anim_offset -= move_command.velocity + time.delta_seconds();
-    if move_command.anim_offset < 0.0 {
-        commands.entity(entity).remove::<MoveCommand>();
+    for (entity, mut move_command) in query.iter_mut() {
+        move_command.anim_offset -= move_command.velocity + time.delta_seconds();
+        if move_command.anim_offset < 0.0 {
+            commands.entity(entity).remove::<MoveCommand>();
+        }
     }
 }
 
@@ -276,38 +281,42 @@ pub fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
     mut sprite_query: Query<(&mut Transform, &SnakePart)>,
 ) {
-    let Ok((snake, move_command, gravity_fall)) = snake_query.get_single() else {
-        return;
-    };
+    for (snake, move_command, gravity_fall) in snake_query.iter() {
+        for (mut transform, part) in sprite_query.iter_mut() {
+            if part.snake_index != snake.index {
+                return;
+            }
 
-    for (mut transform, part) in sprite_query.iter_mut() {
-        let mut part_position = to_world(snake.parts[part.0].0);
+            let mut part_position = to_world(snake.parts[part.part_index].0);
 
-        // Move sprite with move anim.
-        if let Some(move_command) = move_command {
-            let direction = snake.parts[part.0].1;
-            part_position -= move_command.anim_offset * direction.as_vec2();
+            // Move sprite with move anim.
+            if let Some(move_command) = move_command {
+                let direction = snake.parts[part.part_index].1;
+                part_position -= move_command.anim_offset * direction.as_vec2();
 
-            // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
-            if part.0 < snake.parts.len() - 1 && direction != snake.parts[part.0 + 1].1 {
-                let size_offset =
-                    direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-                transform.scale =
-                    (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
-                part_position -= size_offset * 0.5;
+                // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
+                if part.part_index < snake.parts.len() - 1
+                    && direction != snake.parts[part.part_index + 1].1
+                {
+                    let size_offset =
+                        direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
+                    transform.scale =
+                        (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
+                    part_position -= size_offset * 0.5;
+                } else {
+                    transform.scale = Vec3::ONE;
+                }
             } else {
                 transform.scale = Vec3::ONE;
             }
-        } else {
-            transform.scale = Vec3::ONE;
-        }
 
-        // Move sprite with gravity fall anim.
-        if let Some(gravity_fall) = gravity_fall {
-            part_position += gravity_fall.relative_y * Vec2::Y;
-        }
+            // Move sprite with gravity fall anim.
+            if let Some(gravity_fall) = gravity_fall {
+                part_position += gravity_fall.relative_y * Vec2::Y;
+            }
 
-        transform.translation.x = part_position.x;
-        transform.translation.y = part_position.y;
+            transform.translation.x = part_position.x;
+            transform.translation.y = part_position.y;
+        }
     }
 }
