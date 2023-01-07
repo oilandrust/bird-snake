@@ -3,7 +3,7 @@ use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use std::collections::VecDeque;
 
 use crate::{
-    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
+    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
     level_template::LevelTemplate,
     movement_pluggin::{
@@ -79,11 +79,11 @@ struct SnakePartSpriteBundle {
 }
 
 impl SnakePartSpriteBundle {
-    fn new(scale: Vec2) -> Self {
+    fn new(scale: Vec2, color: Color) -> Self {
         SnakePartSpriteBundle {
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
-                    color: Color::GRAY,
+                    color,
                     custom_size: Some(SNAKE_SIZE),
                     ..default()
                 },
@@ -178,7 +178,10 @@ pub fn spawn_snake_system(
             commands
                 .spawn(SnakePartBundle::new(part.0, snake_index as i32, index))
                 .with_children(|parent| {
-                    parent.spawn(SnakePartSpriteBundle::new(Vec2::ONE));
+                    parent.spawn(SnakePartSpriteBundle::new(
+                        Vec2::ONE,
+                        SNAKE_COLORS[snake_index as usize],
+                    ));
                 });
         }
 
@@ -290,7 +293,6 @@ pub fn grow_snake_on_move_system(
         let new_part_position = snake.tail_position() - tail_direction;
         snake.parts.push_back((new_part_position, tail_direction));
 
-        level.set_empty(food.0);
         level.mark_position_walkable(new_part_position, Walkable::Snake(snake.index));
 
         snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
@@ -313,7 +315,10 @@ pub fn grow_snake_on_move_system(
             ))
             .with_children(|parent| {
                 parent
-                    .spawn(SnakePartSpriteBundle::new(Vec2::ZERO))
+                    .spawn(SnakePartSpriteBundle::new(
+                        Vec2::ZERO,
+                        SNAKE_COLORS[snake.index as usize],
+                    ))
                     .insert(Animator::new(grow_tween));
             });
     }

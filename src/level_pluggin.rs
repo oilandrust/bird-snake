@@ -1,7 +1,7 @@
 use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
-    game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
+    game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT, WALL_COLOR},
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
     movement_pluggin::{snake_movement_control_system, SnakeHistory},
@@ -150,7 +150,7 @@ fn spawn_level_entities_system(
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: Color::DARK_GRAY,
+                    color: WALL_COLOR,
                     custom_size: Some(GRID_CELL_SIZE),
                     ..default()
                 },
