@@ -4,7 +4,8 @@ use bevy::prelude::*;
 
 use crate::{
     game_constants_pluggin::*,
-    level_pluggin::{spawn_food, LevelInstance},
+    level_pluggin::{spawn_food, LevelInstance, Walkable},
+    level_template::SnakeElement,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, DespawnSnakePartEvent,
         SelectedSnake, Snake, SnakePart, SpawnSnakeEvent,
@@ -36,36 +37,59 @@ pub enum MoveHistoryEvent {
     Eat(IVec2),
 }
 
-#[derive(Resource, Default)]
-pub struct SnakeHistory {
-    move_history: Vec<MoveHistoryEvent>,
+#[derive(Copy, Clone)]
+struct SnakeHistoryEvent {
+    event: MoveHistoryEvent,
+    snake_index: i32,
 }
 
+#[derive(Resource, Default)]
+pub struct SnakeHistory {
+    move_history: Vec<SnakeHistoryEvent>,
+}
+
+pub struct UndoEvent;
+
 impl SnakeHistory {
-    pub fn push(&mut self, event: MoveHistoryEvent) {
-        self.move_history.push(event);
+    pub fn push(&mut self, event: MoveHistoryEvent, snake_index: i32) {
+        self.move_history
+            .push(SnakeHistoryEvent { event, snake_index });
     }
 
     pub fn undo_last(
         &mut self,
-        snake: &mut Snake,
+        snakes: &mut [Mut<Snake>],
         level: &mut LevelInstance,
         commands: &mut Commands,
         despawn_snake_part_event: &mut EventWriter<DespawnSnakePartEvent>,
     ) {
         let top = *self.move_history.last().unwrap();
-        match top {
+        let snake: &mut Snake = snakes
+            .iter_mut()
+            .find(|snake| snake.index == top.snake_index)
+            .expect("Missing snake in query")
+            .as_mut();
+
+        match top.event {
             MoveHistoryEvent::Move(part) => {
-                snake.parts.push_back(part);
-                snake.parts.pop_front();
+                self.undo_move(level, snake, &part);
                 self.move_history.pop();
             }
             MoveHistoryEvent::Fall(fall_distance) => {
+                for (position, _) in &snake.parts {
+                    level.set_empty(*position);
+                }
+
                 snake.move_up(fall_distance);
+
+                for (position, _) in &snake.parts {
+                    level.mark_position_walkable(*position, Walkable::Snake(snake.index as i32));
+                }
+
                 self.move_history.pop();
 
                 // If a fall history happens, it must be preceded by a move, undo that as well.
-                self.expect_and_undo_move(snake);
+                self.expect_and_undo_move(level, snake);
             }
             MoveHistoryEvent::Eat(position) => {
                 despawn_snake_part_event.send(DespawnSnakePartEvent(SnakePart {
@@ -73,21 +97,33 @@ impl SnakeHistory {
                     part_index: snake.parts.len() - 1,
                 }));
 
+                level.set_empty(snake.tail_position());
+
                 spawn_food(commands, &position, level);
 
                 self.move_history.pop();
 
                 // If a eat history happens, it must be preceded by a move, undo that as well.
-                self.expect_and_undo_move(snake);
+                self.expect_and_undo_move(level, snake);
             }
         }
     }
 
-    fn expect_and_undo_move(&mut self, snake: &mut Snake) {
+    fn undo_move(&mut self, level: &mut LevelInstance, snake: &mut Snake, part: &SnakeElement) {
+        let old_head = snake.head_position();
+
+        snake.parts.push_back(*part);
+        snake.parts.pop_front();
+
+        level.set_empty(old_head);
+        level.mark_position_walkable(part.0, Walkable::Snake(snake.index as i32));
+    }
+
+    fn expect_and_undo_move(&mut self, level: &mut LevelInstance, snake: &mut Snake) {
         assert!(!self.move_history.is_empty());
-        if let MoveHistoryEvent::Move(part) = self.move_history.last().unwrap() {
-            snake.parts.push_back(*part);
-            snake.parts.pop_front();
+        let event = self.move_history.last().unwrap();
+        if let MoveHistoryEvent::Move(part) = event.event {
+            self.undo_move(level, snake, &part);
 
             self.move_history.pop();
         } else {
@@ -104,10 +140,12 @@ impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<SnakeMovedEvent>()
+            .add_event::<UndoEvent>()
             .add_system(snake_movement_undo_system)
             .add_system(snake_movement_control_system.after(snake_movement_undo_system))
             .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
             .add_system(gravity_system.after(grow_snake_on_move_system))
+            .add_system(undo_event_system.after(gravity_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
             .add_system(respawn_snake_on_fall_system.after(gravity_system))
             .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
@@ -118,7 +156,7 @@ fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
     snake
         .parts
         .iter()
-        .map(|(position, _)| level.get_distance_to_ground(*position))
+        .map(|(position, _)| level.get_distance_to_ground(*position, snake.index as i32))
         .min()
         .unwrap()
 }
@@ -131,7 +169,7 @@ type WithMovementControlSystemFilter = (
 
 pub fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
-    level: Res<LevelInstance>,
+    mut level: ResMut<LevelInstance>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
@@ -175,9 +213,15 @@ pub fn snake_movement_control_system(
         return;
     }
 
-    snake_history.push(MoveHistoryEvent::Move(*snake.parts.back().unwrap()));
+    snake_history.push(
+        MoveHistoryEvent::Move(*snake.parts.back().unwrap()),
+        snake.index,
+    );
 
     // Finaly move the snake forward.
+    level.set_empty(snake.tail_position());
+    level.mark_position_walkable(new_position, Walkable::Snake(snake.index as i32));
+
     snake.parts.push_front((new_position, direction));
     snake.parts.pop_back();
 
@@ -192,13 +236,24 @@ pub fn snake_movement_control_system(
 
 pub fn snake_movement_undo_system(
     keyboard: Res<Input<KeyCode>>,
+    mut trigger_undo_event: EventWriter<UndoEvent>,
+) {
+    if !keyboard.just_pressed(KeyCode::Back) {
+        return;
+    }
+
+    trigger_undo_event.send(UndoEvent);
+}
+
+pub fn undo_event_system(
+    mut trigger_undo_event: EventReader<UndoEvent>,
     mut snake_history: ResMut<SnakeHistory>,
     mut level: ResMut<LevelInstance>,
     mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
     mut commands: Commands,
     mut query: Query<&mut Snake>,
 ) {
-    if !keyboard.just_pressed(KeyCode::Back) {
+    if trigger_undo_event.iter().next().is_none() {
         return;
     }
 
@@ -206,12 +261,10 @@ pub fn snake_movement_undo_system(
         return;
     }
 
-    let Ok(mut snake) = query.get_single_mut() else {
-        return;
-    };
+    let mut snakes: Vec<Mut<Snake>> = query.iter_mut().collect();
 
     snake_history.undo_last(
-        &mut snake,
+        &mut snakes,
         &mut level,
         &mut commands,
         &mut despawn_snake_part_event,
@@ -221,7 +274,7 @@ pub fn snake_movement_undo_system(
 fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
-    level: Res<LevelInstance>,
+    mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
@@ -239,12 +292,26 @@ fn gravity_system(
                         gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
                         gravity_fall.grid_distance += 1;
 
+                        for (position, _) in &snake.parts {
+                            level.set_empty(*position);
+                        }
+
                         snake.fall_one_unit();
                     } else {
                         // ..or stop falling animation.
                         commands.entity(snake_entity).remove::<GravityFall>();
 
-                        snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
+                        for (position, _) in &snake.parts {
+                            level.mark_position_walkable(
+                                *position,
+                                Walkable::Snake(snake.index as i32),
+                            );
+                        }
+
+                        snake_history.push(
+                            MoveHistoryEvent::Fall(gravity_fall.grid_distance),
+                            snake.index,
+                        );
                     }
                 }
             }
@@ -256,6 +323,10 @@ fn gravity_system(
                         relative_y: GRID_TO_WORLD_UNIT,
                         grid_distance: 1,
                     });
+
+                    for (position, _) in &snake.parts {
+                        level.set_empty(*position);
+                    }
 
                     snake.fall_one_unit();
                 }
@@ -284,7 +355,7 @@ pub fn update_sprite_positions_system(
     for (snake, move_command, gravity_fall) in snake_query.iter() {
         for (mut transform, part) in sprite_query.iter_mut() {
             if part.snake_index != snake.index {
-                return;
+                continue;
             }
 
             let mut part_position = to_world(snake.parts[part.part_index].0);

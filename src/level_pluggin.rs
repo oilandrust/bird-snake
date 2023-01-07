@@ -22,9 +22,10 @@ pub struct CurrentLevelId(usize);
 
 pub struct LevelPluggin;
 
-enum Walkable {
+pub enum Walkable {
     Food,
     Wall,
+    Snake(i32),
 }
 
 #[derive(Resource)]
@@ -47,10 +48,19 @@ impl LevelInstance {
         self.walkable_positions.remove(&position);
     }
 
+    pub fn mark_position_walkable(&mut self, position: IVec2, value: Walkable) {
+        self.walkable_positions.insert(position, value);
+    }
+
     pub fn is_food(&self, position: IVec2) -> bool {
-        match self.walkable_positions.get(&position) {
-            Some(Walkable::Food) => true,
-            _ => true,
+        matches!(self.walkable_positions.get(&position), Some(Walkable::Food))
+    }
+
+    pub fn is_snake(&self, position: IVec2, snake_index: i32) -> bool {
+        let walkable = self.walkable_positions.get(&position);
+        match walkable {
+            Some(Walkable::Snake(index)) => *index == snake_index,
+            _ => false,
         }
     }
 
@@ -62,13 +72,13 @@ impl LevelInstance {
         }
     }
 
-    pub fn get_distance_to_ground(&self, position: IVec2) -> i32 {
-        let mut distance = 0;
+    pub fn get_distance_to_ground(&self, position: IVec2, snake_index: i32) -> i32 {
+        let mut distance = 1;
 
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
-        let mut current_position = position;
-        while self.is_empty(current_position) {
+        let mut current_position = position + IVec2::NEG_Y;
+        while self.is_empty(current_position) || self.is_snake(current_position, snake_index) {
             current_position += IVec2::NEG_Y;
             distance += 1;
 
@@ -152,9 +162,7 @@ fn spawn_level_entities_system(
             })
             .insert(LevelEntity);
 
-        level_instance
-            .walkable_positions
-            .insert(position, Walkable::Wall);
+        level_instance.mark_position_walkable(position, Walkable::Wall);
     }
 
     // Spawn the food sprites.
@@ -206,9 +214,8 @@ pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mu
         })
         .insert(Food(*position))
         .insert(LevelEntity);
-    level_instance
-        .walkable_positions
-        .insert(*position, Walkable::Food);
+
+    level_instance.mark_position_walkable(*position, Walkable::Food);
 }
 
 pub fn clear_level_system(

@@ -4,11 +4,11 @@ use std::collections::VecDeque;
 
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
-    level_pluggin::{Food, LevelEntity, LevelInstance},
+    level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
     level_template::LevelTemplate,
     movement_pluggin::{
         update_sprite_positions_system, GravityFall, MoveHistoryEvent, SnakeHistory,
-        SnakeMovedEvent,
+        SnakeMovedEvent, UndoEvent,
     },
 };
 
@@ -33,7 +33,7 @@ pub struct SelectedSnake;
 
 #[derive(Component, PartialEq, Eq)]
 pub struct SnakePart {
-    pub snake_index: usize,
+    pub snake_index: i32,
     pub part_index: usize,
 }
 
@@ -45,7 +45,7 @@ struct SnakePartBundle {
 }
 
 impl SnakePartBundle {
-    fn new(position: IVec2, snake_index: usize, part_index: usize) -> Self {
+    fn new(position: IVec2, snake_index: i32, part_index: usize) -> Self {
         SnakePartBundle {
             spatial_bundle: SpatialBundle {
                 transform: Transform {
@@ -110,7 +110,7 @@ impl Lens<Transform> for GrowPartLens {
 #[derive(Component)]
 pub struct Snake {
     pub parts: VecDeque<(IVec2, IVec2)>,
-    pub index: usize,
+    pub index: i32,
 }
 
 pub struct SpawnSnakeEvent;
@@ -155,9 +155,10 @@ impl Snake {
 }
 
 pub fn spawn_snake_system(
+    level: Res<LevelTemplate>,
+    mut level_instance: ResMut<LevelInstance>,
     mut commands: Commands,
     mut event_spawn_snake: EventReader<SpawnSnakeEvent>,
-    level: Res<LevelTemplate>,
 ) {
     if event_spawn_snake.iter().next().is_none() {
         return;
@@ -166,7 +167,7 @@ pub fn spawn_snake_system(
     for (snake_index, snake_template) in level.initial_snakes.iter().enumerate() {
         for (index, part) in snake_template.iter().enumerate() {
             commands
-                .spawn(SnakePartBundle::new(part.0, snake_index, index))
+                .spawn(SnakePartBundle::new(part.0, snake_index as i32, index))
                 .with_children(|parent| {
                     parent.spawn(SnakePartSpriteBundle::new(Vec2::ONE));
                 });
@@ -174,7 +175,7 @@ pub fn spawn_snake_system(
 
         let mut spawn_command = commands.spawn(Snake {
             parts: VecDeque::from(snake_template.clone()),
-            index: snake_index,
+            index: snake_index as i32,
         });
 
         spawn_command.insert(LevelEntity);
@@ -182,30 +183,32 @@ pub fn spawn_snake_system(
         if snake_index == 0 {
             spawn_command.insert(SelectedSnake);
         }
+
+        for (position, _) in snake_template {
+            level_instance.mark_position_walkable(*position, Walkable::Snake(snake_index as i32));
+        }
     }
 }
 
 pub fn respawn_snake_on_fall_system(
     mut snake_history: ResMut<SnakeHistory>,
-    mut level_instance: ResMut<LevelInstance>,
+    mut trigger_undo_event: EventWriter<UndoEvent>,
     mut commands: Commands,
-    mut despawn_snake_part_event: EventWriter<DespawnSnakePartEvent>,
-    mut snake_query: Query<(Entity, &mut Snake, &GravityFall)>,
+    mut snake_query: Query<(Entity, &Snake, &GravityFall)>,
 ) {
-    for (snake_entity, mut snake, &gravity_fall) in snake_query.iter_mut() {
+    for (snake_entity, snake, &gravity_fall) in snake_query.iter_mut() {
         if snake.head_position().y >= -2 {
             return;
         }
 
-        snake_history.push(MoveHistoryEvent::Fall(gravity_fall.grid_distance));
-        snake_history.undo_last(
-            &mut snake,
-            &mut level_instance,
-            &mut commands,
-            &mut despawn_snake_part_event,
+        snake_history.push(
+            MoveHistoryEvent::Fall(gravity_fall.grid_distance),
+            snake.index,
         );
 
         commands.entity(snake_entity).remove::<GravityFall>();
+
+        trigger_undo_event.send(UndoEvent);
     }
 }
 
@@ -235,7 +238,7 @@ pub fn grow_snake_on_move_system(
             let new_part_position = snake.tail_position() - tail_direction;
             snake.parts.push_back((new_part_position, tail_direction));
 
-            snake_history.push(MoveHistoryEvent::Eat(food.0));
+            snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
 
             let grow_tween = Tween::new(
                 EaseFunction::QuadraticInOut,
