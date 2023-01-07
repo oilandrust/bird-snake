@@ -5,9 +5,7 @@ use crate::{
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
     movement_pluggin::{snake_movement_control_system, SnakeHistory},
-    snake_pluggin::{
-        DespawnSnakeEvent, DespawnSnakePartEvent, SelectedSnake, Snake, SpawnSnakeEvent,
-    },
+    snake_pluggin::{DespawnSnakeEvent, SelectedSnake, Snake, SpawnSnakeEvent},
 };
 
 pub struct StartLevelEvent(pub usize);

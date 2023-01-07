@@ -3,7 +3,7 @@ use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use std::collections::VecDeque;
 
 use crate::{
-    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
+    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
     level_template::LevelTemplate,
     movement_pluggin::{
@@ -19,6 +19,7 @@ impl Plugin for SnakePluggin {
         app.add_event::<DespawnSnakePartEvent>()
             .add_event::<DespawnSnakeEvent>()
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
+            .add_system(select_snake_mouse_system)
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 despawn_snake_part_system.after(update_sprite_positions_system),
@@ -198,6 +199,50 @@ pub fn spawn_snake_system(
     }
 }
 
+pub fn select_snake_mouse_system(
+    buttons: Res<Input<MouseButton>>,
+    windows: Res<Windows>,
+    mut commands: Commands,
+    camera: Query<(&Camera, &GlobalTransform)>,
+    selected_snake: Query<Entity, With<SelectedSnake>>,
+    unselected_snakes: Query<(Entity, &Snake), Without<SelectedSnake>>,
+) {
+    if !buttons.just_pressed(MouseButton::Left) {
+        return;
+    }
+
+    let window = windows.get_primary().unwrap();
+
+    let Some(mouse_position) = window.cursor_position() else {
+        return;
+    };
+
+    let (camera, camera_transform) = camera.single();
+    let mouse_world_position = {
+        let window_size = Vec2::new(window.width() as f32, window.height() as f32);
+        let ndc = (mouse_position / window_size) * 2.0 - Vec2::ONE;
+        let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
+        let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
+
+        world_pos.truncate()
+    };
+
+    let mouse_grid_position = to_grid(mouse_world_position);
+    let selected_snake_entity = selected_snake.single();
+
+    for (entity, snake) in unselected_snakes.iter() {
+        if !snake.occupies_position(mouse_grid_position) {
+            continue;
+        }
+
+        commands
+            .entity(selected_snake_entity)
+            .remove::<SelectedSnake>();
+
+        commands.entity(entity).insert(SelectedSnake);
+    }
+}
+
 pub fn respawn_snake_on_fall_system(
     mut snake_history: ResMut<SnakeHistory>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
@@ -241,11 +286,12 @@ pub fn grow_snake_on_move_system(
 
         commands.entity(food_entity).despawn();
 
-        level.set_empty(food.0);
-
         let tail_direction = snake.tail_direction();
         let new_part_position = snake.tail_position() - tail_direction;
         snake.parts.push_back((new_part_position, tail_direction));
+
+        level.set_empty(food.0);
+        level.mark_position_walkable(new_part_position, Walkable::Snake(snake.index));
 
         snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
 

@@ -13,6 +13,12 @@ pub fn to_world(position: IVec2) -> Vec2 {
     (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
 }
 
+pub fn to_grid(position: Vec2) -> IVec2 {
+    (position * GRID_TO_WORLD_UNIT_INVERSE - 0.5)
+        .round()
+        .as_ivec2()
+}
+
 #[derive(Resource, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
 pub struct GameConstants {
