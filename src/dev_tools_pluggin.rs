@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::bevy_inspector;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
@@ -58,6 +59,12 @@ fn inspector_ui_system(world: &mut World) {
 
     egui::Window::new("GameConstants").show(&egui_context, |ui| {
         bevy_inspector_egui::bevy_inspector::ui_for_resource::<GameConstants>(world, ui);
+    });
+
+    egui::Window::new("Inspector").show(&egui_context, |ui| {
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            bevy_inspector::ui_for_world(world, ui);
+        });
     });
 }
 

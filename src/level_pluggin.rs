@@ -5,7 +5,9 @@ use crate::{
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
     movement_pluggin::{snake_movement_control_system, SnakeHistory},
-    snake_pluggin::{Snake, SpawnSnakeEvent},
+    snake_pluggin::{
+        DespawnSnakeEvent, DespawnSnakePartEvent, SelectedSnake, Snake, SpawnSnakeEvent,
+    },
 };
 
 pub struct StartLevelEvent(pub usize);
@@ -240,12 +242,13 @@ pub fn check_for_level_completion_system(
     level_id: Res<CurrentLevelId>,
     mut event_start_level: EventWriter<StartLevelEvent>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
+    mut event_despawn_snake: EventWriter<DespawnSnakeEvent>,
     mut exit: EventWriter<AppExit>,
-    mut query: Query<&Snake>,
+    mut commands: Commands,
+    selected_snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
+    other_snakes_query: Query<Entity, (With<Snake>, Without<SelectedSnake>)>,
 ) {
-    let Ok(snake) = query.get_single_mut() else {
-        return;
-    };
+    let (entity, snake) = selected_snake_query.single();
 
     if level.goal_position != snake.head_position() {
         return;
@@ -253,6 +256,14 @@ pub fn check_for_level_completion_system(
 
     if level_id.0 == LEVELS.len() - 1 {
         exit.send(AppExit);
+        return;
+    }
+
+    if let Some(next_snake_entity) = other_snakes_query.iter().next() {
+        commands.entity(entity).remove::<SelectedSnake>();
+        event_despawn_snake.send(DespawnSnakeEvent(snake.index));
+
+        commands.entity(next_snake_entity).insert(SelectedSnake);
     } else {
         event_clear_level.send(ClearLevelEvent);
         event_start_level.send(StartLevelEvent(level_id.0 + 1));

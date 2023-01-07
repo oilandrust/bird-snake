@@ -17,16 +17,24 @@ pub struct SnakePluggin;
 impl Plugin for SnakePluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<DespawnSnakePartEvent>()
+            .add_event::<DespawnSnakeEvent>()
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                despawn_snake_part.after(update_sprite_positions_system),
+                despawn_snake_part_system.after(update_sprite_positions_system),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_system.after(update_sprite_positions_system),
             );
     }
 }
 
 #[derive(PartialEq, Eq)]
 pub struct DespawnSnakePartEvent(pub SnakePart);
+
+#[derive(PartialEq, Eq)]
+pub struct DespawnSnakeEvent(pub i32);
 
 #[derive(Component)]
 pub struct SelectedSnake;
@@ -217,55 +225,87 @@ pub fn grow_snake_on_move_system(
     mut commands: Commands,
     mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
-    mut snake_query: Query<&mut Snake>,
+    mut snake_query: Query<&mut Snake, With<SelectedSnake>>,
     foods_query: Query<(Entity, &Food), With<Food>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
     }
 
-    for mut snake in snake_query.iter_mut() {
-        for (food_entity, food) in &foods_query {
-            if food.0 != snake.head_position() {
+    let mut snake = snake_query.single_mut();
+
+    for (food_entity, food) in &foods_query {
+        if food.0 != snake.head_position() {
+            continue;
+        }
+
+        commands.entity(food_entity).despawn();
+
+        level.set_empty(food.0);
+
+        let tail_direction = snake.tail_direction();
+        let new_part_position = snake.tail_position() - tail_direction;
+        snake.parts.push_back((new_part_position, tail_direction));
+
+        snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
+
+        let grow_tween = Tween::new(
+            EaseFunction::QuadraticInOut,
+            std::time::Duration::from_secs_f32(0.2),
+            GrowPartLens {
+                scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
+                scale_end: Vec2::ONE,
+                grow_direction: -tail_direction.as_vec2(),
+            },
+        );
+
+        commands
+            .spawn(SnakePartBundle::new(
+                new_part_position,
+                snake.index,
+                snake.len() - 1,
+            ))
+            .with_children(|parent| {
+                parent
+                    .spawn(SnakePartSpriteBundle::new(Vec2::ZERO))
+                    .insert(Animator::new(grow_tween));
+            });
+    }
+}
+
+fn despawn_snake_system(
+    mut despawn_snake_event: EventReader<DespawnSnakeEvent>,
+    mut level_instance: ResMut<LevelInstance>,
+    mut commands: Commands,
+    snakes_query: Query<(Entity, &Snake)>,
+    parts_query: Query<(Entity, &SnakePart)>,
+) {
+    for message in despawn_snake_event.iter() {
+        // Despawn snake.
+        for (entity, snake) in snakes_query.iter() {
+            if snake.index != message.0 {
                 continue;
             }
 
-            commands.entity(food_entity).despawn();
+            commands.entity(entity).despawn_recursive();
 
-            level.set_empty(food.0);
+            for (position, _) in &snake.parts {
+                level_instance.set_empty(*position);
+            }
+        }
 
-            let tail_direction = snake.tail_direction();
-            let new_part_position = snake.tail_position() - tail_direction;
-            snake.parts.push_back((new_part_position, tail_direction));
+        // Despawn parts
+        for (entity, part) in parts_query.iter() {
+            if part.snake_index != message.0 {
+                continue;
+            }
 
-            snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
-
-            let grow_tween = Tween::new(
-                EaseFunction::QuadraticInOut,
-                std::time::Duration::from_secs_f32(0.2),
-                GrowPartLens {
-                    scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
-                    scale_end: Vec2::ONE,
-                    grow_direction: -tail_direction.as_vec2(),
-                },
-            );
-
-            commands
-                .spawn(SnakePartBundle::new(
-                    new_part_position,
-                    snake.index,
-                    snake.len() - 1,
-                ))
-                .with_children(|parent| {
-                    parent
-                        .spawn(SnakePartSpriteBundle::new(Vec2::ZERO))
-                        .insert(Animator::new(grow_tween));
-                });
+            commands.entity(entity).despawn_recursive();
         }
     }
 }
 
-fn despawn_snake_part(
+fn despawn_snake_part_system(
     mut despawn_snake_part_event: EventReader<DespawnSnakePartEvent>,
     mut commands: Commands,
     mut snake_query: Query<&mut Snake>,
