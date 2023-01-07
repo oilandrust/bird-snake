@@ -1,7 +1,9 @@
 use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
-    game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT, WALL_COLOR},
+    game_constants_pluggin::{
+        to_world, BRIGHT_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT, WALL_COLOR,
+    },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
     movement_pluggin::{snake_movement_control_system, SnakeHistory},
@@ -40,6 +42,10 @@ impl LevelInstance {
         }
     }
 
+    pub fn walkable_positions(&self) -> &HashMap<IVec2, Walkable> {
+        &self.walkable_positions
+    }
+
     pub fn is_empty(&self, position: IVec2) -> bool {
         !self.walkable_positions.contains_key(&position)
     }
@@ -56,7 +62,31 @@ impl LevelInstance {
         matches!(self.walkable_positions.get(&position), Some(Walkable::Food))
     }
 
-    pub fn is_snake(&self, position: IVec2, snake_index: i32) -> bool {
+    pub fn is_snake(&self, position: IVec2) -> Option<i32> {
+        let walkable = self.walkable_positions.get(&position);
+        match walkable {
+            Some(Walkable::Snake(index)) => Some(*index),
+            _ => None,
+        }
+    }
+
+    pub fn move_snake(&mut self, snake: &Snake, offset: IVec2) {
+        for (position, _) in &snake.parts {
+            self.set_empty(*position);
+        }
+        for (position, _) in &snake.parts {
+            self.mark_position_walkable(*position + offset, Walkable::Snake(snake.index as i32));
+        }
+    }
+
+    pub fn can_push_snake(&self, snake: &Snake, direction: IVec2) -> bool {
+        snake.parts.iter().all(|(position, _)| {
+            self.is_empty(*position + direction)
+                || self.is_snake_with_index(*position + direction, snake.index)
+        })
+    }
+
+    pub fn is_snake_with_index(&self, position: IVec2, snake_index: i32) -> bool {
         let walkable = self.walkable_positions.get(&position);
         match walkable {
             Some(Walkable::Snake(index)) => *index == snake_index,
@@ -64,12 +94,8 @@ impl LevelInstance {
         }
     }
 
-    pub fn is_food_or_empty(&self, position: IVec2) -> bool {
-        match self.walkable_positions.get(&position) {
-            Some(Walkable::Food) => true,
-            Some(_) => false,
-            None => true,
-        }
+    pub fn is_wall(&self, position: IVec2) -> bool {
+        matches!(self.walkable_positions.get(&position), Some(Walkable::Wall))
     }
 
     pub fn get_distance_to_ground(&self, position: IVec2, snake_index: i32) -> i32 {
@@ -78,7 +104,9 @@ impl LevelInstance {
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
         let mut current_position = position + IVec2::NEG_Y;
-        while self.is_empty(current_position) || self.is_snake(current_position, snake_index) {
+        while self.is_empty(current_position)
+            || self.is_snake_with_index(current_position, snake_index)
+        {
             current_position += IVec2::NEG_Y;
             distance += 1;
 
@@ -174,7 +202,7 @@ fn spawn_level_entities_system(
     commands
         .spawn(SpriteBundle {
             sprite: Sprite {
-                color: Color::LIME_GREEN,
+                color: BRIGHT_COLOR_PALETTE[8],
                 custom_size: Some(GRID_CELL_SIZE),
                 ..default()
             },
@@ -202,7 +230,7 @@ pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mu
     commands
         .spawn(SpriteBundle {
             sprite: Sprite {
-                color: Color::ORANGE,
+                color: BRIGHT_COLOR_PALETTE[3],
                 custom_size: Some(GRID_CELL_SIZE),
                 ..default()
             },

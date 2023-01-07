@@ -19,6 +19,7 @@ const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
 
 #[derive(Component, Default)]
 pub struct MoveCommand {
+    direction: Option<IVec2>,
     velocity: f32,
     anim_offset: f32,
 }
@@ -174,9 +175,10 @@ pub fn snake_movement_control_system(
     mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
-    mut query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
+    mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
+    mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
 ) {
-    let Ok((snake_entity, mut snake)) = query.get_single_mut() else {
+    let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
         return;
     };
 
@@ -208,17 +210,38 @@ pub fn snake_movement_control_system(
         return;
     }
 
-    // Check for collition with self.
-    if snake.occupies_position(new_position) || !level.is_food_or_empty(new_position) {
+    // Check for collition with self and walls.
+    if snake.occupies_position(new_position) || level.is_wall(new_position) {
         return;
     }
 
+    // Push a snake if possible.
+    if let Some(other_snake_id) = level.is_snake(new_position) {
+        let (other_entity, mut other_snake) = other_snakes_query
+            .iter_mut()
+            .find(|(_, snake)| snake.index == other_snake_id)
+            .unwrap();
+
+        if level.can_push_snake(other_snake.as_ref(), direction) {
+            level.move_snake(other_snake.as_ref(), direction);
+            other_snake.as_mut().translate(direction);
+
+            commands.entity(other_entity).insert(MoveCommand {
+                direction: Some(direction),
+                velocity: constants.move_velocity,
+                anim_offset: GRID_TO_WORLD_UNIT,
+            });
+        } else {
+            return;
+        }
+    }
+
+    // Finaly move the snake forward and commit the state.
     snake_history.push(
         MoveHistoryEvent::Move(*snake.parts.back().unwrap()),
         snake.index,
     );
 
-    // Finaly move the snake forward.
     level.set_empty(snake.tail_position());
     level.mark_position_walkable(new_position, Walkable::Snake(snake.index as i32));
 
@@ -229,6 +252,7 @@ pub fn snake_movement_control_system(
 
     // Smooth move animation starts.
     commands.entity(snake_entity).insert(MoveCommand {
+        direction: None,
         velocity: constants.move_velocity,
         anim_offset: GRID_TO_WORLD_UNIT,
     });
@@ -362,11 +386,15 @@ pub fn update_sprite_positions_system(
 
             // Move sprite with move anim.
             if let Some(move_command) = move_command {
-                let direction = snake.parts[part.part_index].1;
+                let direction = move_command
+                    .direction
+                    .unwrap_or(snake.parts[part.part_index].1);
+
                 part_position -= move_command.anim_offset * direction.as_vec2();
 
                 // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
-                if part.part_index < snake.parts.len() - 1
+                if move_command.direction.is_none()
+                    && part.part_index < snake.parts.len() - 1
                     && direction != snake.parts[part.part_index + 1].1
                 {
                     let size_offset =

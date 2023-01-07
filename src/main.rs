@@ -20,7 +20,7 @@ fn start_game(mut event_writer: EventWriter<StartLevelEvent>) {
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::BEIGE))
+        .insert_resource(ClearColor(DARK_COLOR_PALETTE[4]))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "Snake".to_string(),

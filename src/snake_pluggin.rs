@@ -161,6 +161,12 @@ impl Snake {
             *position += IVec2::Y * distance;
         }
     }
+
+    pub fn translate(&mut self, offset: IVec2) {
+        for (position, _) in self.parts.iter_mut() {
+            *position += offset;
+        }
+    }
 }
 
 pub fn spawn_snake_system(

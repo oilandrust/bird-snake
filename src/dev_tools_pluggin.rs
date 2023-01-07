@@ -5,6 +5,7 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::game_constants_pluggin::GameConstants;
+use crate::level_pluggin::LevelInstance;
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level_template::LevelTemplate,
@@ -29,7 +30,8 @@ impl Plugin for DevToolsPlugin {
             .add_system(toogle_dev_tools_system)
             .add_system(inspector_ui_system)
             .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
-            .add_system_to_stage(CoreStage::Last, debug_draw_snake_system);
+            .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
+            .add_system_to_stage(CoreStage::Last, debug_draw_level_cells);
     }
 }
 
@@ -130,5 +132,40 @@ fn debug_draw_snake_system(
                 Color::BLUE,
             );
         }
+    }
+}
+
+fn debug_draw_level_cells(
+    dev_tool_settings: Res<DevToolsSettings>,
+    mut lines: ResMut<DebugLines>,
+    level: Res<LevelInstance>,
+) {
+    if !dev_tool_settings.dev_tools_enabled {
+        return;
+    }
+
+    for (position, value) in level.walkable_positions() {
+        let world_grid = to_world(*position);
+        let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
+
+        let color = match value {
+            crate::level_pluggin::Walkable::Food => Color::RED,
+            crate::level_pluggin::Walkable::Wall => Color::BLACK,
+            crate::level_pluggin::Walkable::Snake(_) => Color::BLUE,
+        };
+
+        lines.line_colored(
+            world_grid + Vec3::new(5.0, 5.0, 0.0),
+            world_grid + Vec3::new(-5.0, -5.0, 0.0),
+            0.,
+            color,
+        );
+
+        lines.line_colored(
+            world_grid + Vec3::new(-5.0, 5.0, 0.0),
+            world_grid + Vec3::new(5.0, -5.0, 0.0),
+            0.,
+            color,
+        );
     }
 }

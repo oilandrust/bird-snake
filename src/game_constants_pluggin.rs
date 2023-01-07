@@ -9,22 +9,31 @@ pub const MOVE_START_VELOCITY: f32 = 4.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
 pub const GRAVITY: f32 = 300.0;
 
-// https://coolors.co/palette/001219-005f73-0a9396-94d2bd-e9d8a6-ee9b00-ca6702-bb3e03-ae2012-9b2226
-pub const COLOR_PALETTE: [Color; 10] = [
-    Color::rgb(0., 0.07058824, 0.09803922),
-    Color::rgb(0., 0.37254903, 0.4509804),
-    Color::rgb(0.039215688, 0.5764706, 0.5882353),
-    Color::rgb(0.5803922, 0.8235294, 0.7411765),
-    Color::rgb(0.9137255, 0.84705883, 0.6509804),
-    Color::rgb(0.93333334, 0.60784316, 0.),
-    Color::rgb(0.7921569, 0.40392157, 0.007843138),
-    Color::rgb(0.73333335, 0.24313726, 0.011764706),
-    Color::rgb(0.68235296, 0.1254902, 0.07058824),
-    Color::rgb(0.60784316, 0.13333334, 0.14901961),
+// https://coolors.co/palette/565264-706677-a6808c-ccb7ae-d6cfcb
+pub const DARK_COLOR_PALETTE: [Color; 5] = [
+    Color::rgb(0.3372549, 0.32156864, 0.39215687),
+    Color::rgb(0.4392157, 0.4, 0.46666667),
+    Color::rgb(0.6509804, 0.5019608, 0.54901963),
+    Color::rgb(0.8, 0.7176471, 0.68235296),
+    Color::rgb(0.8392157, 0.8117647, 0.79607844),
 ];
 
-pub const WALL_COLOR: Color = COLOR_PALETTE[0];
-pub const SNAKE_COLORS: [Color; 2] = [COLOR_PALETTE[2], COLOR_PALETTE[6]];
+// https://coolors.co/palette/f94144-f3722c-f8961e-f9844a-f9c74f-90be6d-43aa8b-4d908e-577590-277da1
+pub const BRIGHT_COLOR_PALETTE: [Color; 10] = [
+    Color::rgb(0.9764706, 0.25490198, 0.26666668),
+    Color::rgb(0.9529412, 0.44705883, 0.17254902),
+    Color::rgb(0.972549, 0.5882353, 0.11764706),
+    Color::rgb(0.9764706, 0.5176471, 0.2901961),
+    Color::rgb(0.9764706, 0.78039217, 0.30980393),
+    Color::rgb(0.5647059, 0.74509805, 0.42745098),
+    Color::rgb(0.2627451, 0.6666667, 0.54509807),
+    Color::rgb(0.3019608, 0.5647059, 0.5568628),
+    Color::rgb(0.34117648, 0.45882353, 0.5647059),
+    Color::rgb(0.15294118, 0.49019608, 0.6313726),
+];
+
+pub const WALL_COLOR: Color = DARK_COLOR_PALETTE[0];
+pub const SNAKE_COLORS: [Color; 2] = [BRIGHT_COLOR_PALETTE[5], BRIGHT_COLOR_PALETTE[2]];
 
 pub fn to_world(position: IVec2) -> Vec2 {
     (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT
