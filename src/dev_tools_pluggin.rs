@@ -1,6 +1,9 @@
 use bevy::prelude::*;
+use bevy_egui::EguiPlugin;
+use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
+use crate::game_constants_pluggin::GameConstants;
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level_template::LevelTemplate,
@@ -20,25 +23,43 @@ impl Plugin for DevToolsPlugin {
             // .add_plugin(LogDiagnosticsPlugin::default())
             // .add_plugin(FrameTimeDiagnosticsPlugin::default())
             .add_plugin(DebugLinesPlugin::default())
-            //.add_system(toogle_dev_tools_system)
+            .add_plugin(EguiPlugin)
+            .add_plugin(DefaultInspectorConfigPlugin)
+            .add_system(toogle_dev_tools_system)
+            .add_system(inspector_ui_system)
             .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
             .add_system_to_stage(CoreStage::Last, debug_draw_snake_system);
     }
 }
 
-// fn toogle_dev_tools_system(
-//     keyboard: Res<Input<KeyCode>>,
-//     mut dev_tool_settings: ResMut<DevToolsSettings>,
-//     mut inspector_windows: ResMut<InspectorWindows>,
-// ) {
-//     if keyboard.just_pressed(KeyCode::Tab) {
-//         let old_value = dev_tool_settings.dev_tools_enabled;
-//         dev_tool_settings.dev_tools_enabled = !old_value;
-//     }
+fn toogle_dev_tools_system(
+    keyboard: Res<Input<KeyCode>>,
+    mut dev_tool_settings: ResMut<DevToolsSettings>,
+) {
+    if keyboard.just_pressed(KeyCode::Tab) {
+        let old_value = dev_tool_settings.dev_tools_enabled;
+        dev_tool_settings.dev_tools_enabled = !old_value;
+    }
+}
 
-//     inspector_windows.window_data_mut::<GameConstants>().visible =
-//         dev_tool_settings.dev_tools_enabled;
-// }
+fn inspector_ui_system(world: &mut World) {
+    let dev_tool_settings = world
+        .get_resource::<DevToolsSettings>()
+        .expect("A dev tools settings resource should be present.");
+
+    if !dev_tool_settings.dev_tools_enabled {
+        return;
+    }
+
+    let egui_context = world
+        .resource_mut::<bevy_egui::EguiContext>()
+        .ctx_mut()
+        .clone();
+
+    egui::Window::new("GameConstants").show(&egui_context, |ui| {
+        bevy_inspector_egui::bevy_inspector::ui_for_resource::<GameConstants>(world, ui);
+    });
+}
 
 fn debug_draw_grid_system(
     dev_tool_settings: Res<DevToolsSettings>,
@@ -83,26 +104,24 @@ fn debug_draw_snake_system(
         return;
     }
 
-    let Ok(snake) = query.get_single() else {
-        return;
-    };
+    for snake in query.iter() {
+        for position in &snake.parts {
+            let world_grid = to_world(position.0);
+            let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
 
-    for position in &snake.parts {
-        let world_grid = to_world(position.0);
-        let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
+            lines.line_colored(
+                world_grid + Vec3::new(5.0, 5.0, 0.0),
+                world_grid + Vec3::new(-5.0, -5.0, 0.0),
+                0.,
+                Color::BLUE,
+            );
 
-        lines.line_colored(
-            world_grid + Vec3::new(5.0, 5.0, 0.0),
-            world_grid + Vec3::new(-5.0, -5.0, 0.0),
-            0.,
-            Color::BLUE,
-        );
-
-        lines.line_colored(
-            world_grid + Vec3::new(-5.0, 5.0, 0.0),
-            world_grid + Vec3::new(5.0, -5.0, 0.0),
-            0.,
-            Color::BLUE,
-        );
+            lines.line_colored(
+                world_grid + Vec3::new(-5.0, 5.0, 0.0),
+                world_grid + Vec3::new(5.0, -5.0, 0.0),
+                0.,
+                Color::BLUE,
+            );
+        }
     }
 }

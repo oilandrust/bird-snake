@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_inspector_egui::{prelude::*, quick::ResourceInspectorPlugin};
+use bevy_inspector_egui::prelude::*;
 
 pub const GRID_TO_WORLD_UNIT: f32 = 25.;
 pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
@@ -39,7 +39,6 @@ pub struct GameConstantsPlugin;
 
 impl Plugin for GameConstantsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(ResourceInspectorPlugin::<GameConstants>::new());
         app.register_type::<GameConstants>();
         app.insert_resource(GameConstants::default());
     }

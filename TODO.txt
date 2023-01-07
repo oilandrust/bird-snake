@@ -8,7 +8,6 @@ End of level:
 * animation
 
 Multi-Snake:
-* Allow multiple snakes
 * Switch snake controls
 * Pushing/carying snake mechanics
 
