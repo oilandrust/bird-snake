@@ -114,33 +114,34 @@ pub fn snake_movement_control_system(
     }
 
     // Find if there is a snake in the way.
-    let mut other_snake = level_instance
+    let (other_snake_entity, mut other_snake) = level_instance
         .is_snake(new_position)
         .and_then(|other_snake_id| {
             other_snakes_query
                 .iter_mut()
                 .find(|(_, snake)| snake.index() == other_snake_id)
-        });
+        })
+        .unzip();
 
-    if let Some((_, other_snake)) = &mut other_snake {
+    if let Some(other_snake) = &mut other_snake {
         if !level_instance.can_push_snake(other_snake.as_ref(), direction) {
             return;
         }
     };
+
+    let other_snake = other_snake.as_mut().map(|some| some.as_mut());
 
     // Any food?
     let food = foods_query.iter().find(|food| food.0 == new_position);
 
     // Finaly move the snake forward and commit the state.
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
-    let mut move_command = snake_commands.player_move(snake.as_mut(), direction);
 
-    if let Some((other_snake_entity, other_snake)) = &mut other_snake {
-        move_command.pushing_snake((*other_snake_entity, other_snake.as_mut()));
-    }
-
-    move_command.eating_food(food);
-    move_command.execute();
+    snake_commands
+        .player_move(snake.as_mut(), direction)
+        .pushing_snake(other_snake)
+        .eating_food(food)
+        .execute();
 
     snake_moved_event.send(SnakeMovedEvent);
 
@@ -151,7 +152,7 @@ pub fn snake_movement_control_system(
         anim_offset: GRID_TO_WORLD_UNIT,
     });
 
-    if let Some((other_snake_entity, _)) = other_snake {
+    if let Some(other_snake_entity) = other_snake_entity {
         commands.entity(other_snake_entity).insert(MoveCommand {
             direction: Some(direction),
             velocity: constants.move_velocity,
@@ -186,8 +187,11 @@ fn gravity_system(
                         // ..or stop falling animation.
                         commands.entity(snake_entity).remove::<GravityFall>();
 
-                        let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-                        snake_commands.stop_falling(snake.as_ref(), gravity_fall.grid_distance);
+                        if gravity_fall.grid_distance > 0 {
+                            let mut snake_commands =
+                                SnakeCommands::new(&mut level, &mut snake_history);
+                            snake_commands.stop_falling(snake.as_ref(), gravity_fall.grid_distance);
+                        }
                     }
                 }
             }

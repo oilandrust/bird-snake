@@ -63,18 +63,18 @@ pub struct PlayerMoveCommand<'a> {
     level_instance: &'a mut LevelInstance,
     history: &'a mut SnakeHistory,
     snake: &'a mut Snake,
-    other_snake: Option<(Entity, &'a mut Snake)>,
+    other_snake: Option<&'a mut Snake>,
     food: Option<&'a Food>,
     direction: IVec2,
 }
 
 impl<'a> PlayerMoveCommand<'a> {
-    pub fn pushing_snake(&mut self, other_snake: (Entity, &'a mut Snake)) -> &Self {
-        self.other_snake = Some(other_snake);
+    pub fn pushing_snake(mut self, other_snake: Option<&'a mut Snake>) -> Self {
+        self.other_snake = other_snake;
         self
     }
 
-    pub fn eating_food(&mut self, food: Option<&'a Food>) -> &Self {
+    pub fn eating_food(mut self, food: Option<&'a Food>) -> Self {
         self.food = food;
         self
     }
@@ -85,7 +85,7 @@ impl<'a> PlayerMoveCommand<'a> {
             .push(MoveHistoryEvent::PlayerSnakeMove, self.snake.index());
 
         // Move the other snake.
-        if let Some((_, other_snake)) = &mut self.other_snake {
+        if let Some(other_snake) = &mut self.other_snake {
             let walkable_updates = self.level_instance.move_snake(other_snake, self.direction);
 
             other_snake.translate(self.direction);
