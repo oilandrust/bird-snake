@@ -1,7 +1,7 @@
 use crate::{
     level_pluggin::{Food, LevelInstance},
     snake_pluggin::Snake,
-    undo::{MoveHistoryEvent, SnakeHistory},
+    undo::{EndFall, MoveHistoryEvent, SnakeHistory},
 };
 use bevy::prelude::*;
 
@@ -33,17 +33,29 @@ impl<'a> SnakeCommands<'a> {
         let updates = self.level_instance.clear_snake_positions(snake);
 
         self.history
-            .push_with_updates(MoveHistoryEvent::BeginFall, snake.index(), updates);
+            .push_with_updates(MoveHistoryEvent::BeginFall(None), snake.index(), updates);
     }
 
     pub fn stop_falling(&mut self, snake: &'a Snake, distance_fallen: i32) {
         let updates = self.level_instance.mark_snake_positions(snake);
 
-        self.history.push_with_updates(
-            MoveHistoryEvent::EndFall(distance_fallen),
-            snake.index(),
-            updates,
-        );
+        // Stop fall can happen a long time after beggin fall, and other actions can be done in between.
+        // We find the corresponding beggin fall and add the undo info to it so that both can be undone at the same time.
+        let begin_fall = self
+            .history
+            .move_history
+            .iter_mut()
+            .rev()
+            .find(|event| {
+                event.snake_index == snake.index()
+                    && matches!(event.event, MoveHistoryEvent::BeginFall(None))
+            })
+            .unwrap();
+
+        begin_fall.event = MoveHistoryEvent::BeginFall(Some(EndFall {
+            distance_fallen,
+            walkable_updates: updates,
+        }));
     }
 }
 

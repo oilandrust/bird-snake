@@ -5,13 +5,20 @@ use crate::{
     snake_pluggin::{DespawnSnakePartEvent, Snake, SnakePart},
 };
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum WalkableUpdateEvent {
     ClearPosition(IVec2, Walkable),
     FillPosition(IVec2),
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+/// History event marking that a snake stops falling, with distance fallen.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct EndFall {
+    pub distance_fallen: i32,
+    pub walkable_updates: Vec<WalkableUpdateEvent>,
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub enum MoveHistoryEvent {
     /// A history event that marks a player move action.
     PlayerSnakeMove,
@@ -19,23 +26,20 @@ pub enum MoveHistoryEvent {
     /// History event for the snake moving one tile in a direction, storing the old tails for undo.
     SnakeMoveForward((IVec2, IVec2)),
 
-    /// History event for moving a snake with an offste fex: pushing.
+    /// History event for moving a snake with an offset fex: pushing.
     PassiveSnakeMove(IVec2),
 
     /// History event marking that a snake starts falling.
-    BeginFall,
-
-    /// History event marking that a snake stops falling, with distance fallen.
-    EndFall(i32),
+    BeginFall(Option<EndFall>),
 
     Grow,
     Eat(IVec2),
 }
 
 #[derive(Clone)]
-struct SnakeHistoryEvent {
-    event: MoveHistoryEvent,
-    snake_index: i32,
+pub struct SnakeHistoryEvent {
+    pub event: MoveHistoryEvent,
+    pub snake_index: i32,
     walkable_updates: Vec<WalkableUpdateEvent>,
 }
 
@@ -44,7 +48,7 @@ pub struct UndoEvent;
 /// A struct storing history events that can be undone.
 #[derive(Resource, Default)]
 pub struct SnakeHistory {
-    move_history: Vec<SnakeHistoryEvent>,
+    pub move_history: Vec<SnakeHistoryEvent>,
 }
 
 impl SnakeHistory {
@@ -98,11 +102,12 @@ impl SnakeHistory {
                 MoveHistoryEvent::PassiveSnakeMove(offset) => {
                     snake.translate(-offset);
                 }
-                MoveHistoryEvent::BeginFall => {
+                MoveHistoryEvent::BeginFall(None) => {
                     // Nothing to do.
                 }
-                MoveHistoryEvent::EndFall(distance_fallen) => {
-                    snake.move_up(distance_fallen);
+                MoveHistoryEvent::BeginFall(Some(end_fall)) => {
+                    snake.move_up(end_fall.distance_fallen);
+                    level.undo_updates(&end_fall.walkable_updates);
                 }
                 MoveHistoryEvent::Grow => {
                     despawn_snake_part_event.send(DespawnSnakePartEvent(SnakePart {

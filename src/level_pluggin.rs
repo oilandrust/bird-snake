@@ -27,7 +27,7 @@ pub struct CurrentLevelId(usize);
 
 pub struct LevelPluggin;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Walkable {
     Food,
     Wall,
