@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
@@ -6,8 +8,9 @@ use crate::{
     },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
-    movement_pluggin::{snake_movement_control_system, SnakeHistory},
+    movement_pluggin::snake_movement_control_system,
     snake_pluggin::{DespawnSnakeEvent, SelectedSnake, Snake, SpawnSnakeEvent},
+    undo::{SnakeHistory, WalkableUpdateEvent},
 };
 
 pub struct StartLevelEvent(pub usize);
@@ -16,7 +19,7 @@ pub struct ClearLevelEvent;
 #[derive(Component)]
 pub struct LevelEntity;
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub struct Food(pub IVec2);
 
 #[derive(Resource)]
@@ -24,6 +27,7 @@ pub struct CurrentLevelId(usize);
 
 pub struct LevelPluggin;
 
+#[derive(Copy, Clone)]
 pub enum Walkable {
     Food,
     Wall,
@@ -50,11 +54,11 @@ impl LevelInstance {
         !self.walkable_positions.contains_key(&position)
     }
 
-    pub fn set_empty(&mut self, position: IVec2) {
-        self.walkable_positions.remove(&position);
+    pub fn set_empty(&mut self, position: IVec2) -> Option<Walkable> {
+        self.walkable_positions.remove(&position)
     }
 
-    pub fn mark_position_walkable(&mut self, position: IVec2, value: Walkable) {
+    pub fn mark_position_occupied(&mut self, position: IVec2, value: Walkable) {
         self.walkable_positions.insert(position, value);
     }
 
@@ -70,19 +74,96 @@ impl LevelInstance {
         }
     }
 
-    pub fn move_snake(&mut self, snake: &Snake, offset: IVec2) {
-        for (position, _) in &snake.parts {
-            self.set_empty(*position);
+    /// Move a snake forward.
+    /// Set the old tail location empty and mark the new head as occupied.
+    /// Returns a list of updates to the walkable cells that can be undone.
+    pub fn move_snake_forward(
+        &mut self,
+        snake: &Snake,
+        direction: IVec2,
+    ) -> Vec<WalkableUpdateEvent> {
+        let mut updates: Vec<WalkableUpdateEvent> = Vec::with_capacity(2);
+        let new_position = snake.head_position() + direction;
+
+        let old_value = self.set_empty(snake.tail_position()).unwrap();
+        self.mark_position_occupied(new_position, Walkable::Snake(snake.index()));
+
+        updates.push(WalkableUpdateEvent::ClearPosition(
+            snake.tail_position(),
+            old_value,
+        ));
+        updates.push(WalkableUpdateEvent::FillPosition(new_position));
+
+        updates
+    }
+
+    /// Move a snake by an offset:
+    /// Set the old locations are empty and mark the new locations as occupied.
+    /// Returns a list of updates to the walkable cells that can be undone.
+    pub fn move_snake(&mut self, snake: &Snake, offset: IVec2) -> Vec<WalkableUpdateEvent> {
+        let mut updates: VecDeque<WalkableUpdateEvent> = VecDeque::with_capacity(2 * snake.len());
+
+        for (position, _) in snake.parts() {
+            let old_value = self.set_empty(*position).unwrap();
+            updates.push_front(WalkableUpdateEvent::ClearPosition(*position, old_value));
         }
-        for (position, _) in &snake.parts {
-            self.mark_position_walkable(*position + offset, Walkable::Snake(snake.index as i32));
+        for (position, _) in snake.parts() {
+            let new_position = *position + offset;
+            self.mark_position_occupied(new_position, Walkable::Snake(snake.index()));
+            updates.push_front(WalkableUpdateEvent::FillPosition(new_position));
+        }
+
+        updates.into()
+    }
+
+    pub fn eat_food(&mut self, position: IVec2) -> Vec<WalkableUpdateEvent> {
+        let old_value = self.set_empty(position).unwrap();
+        vec![WalkableUpdateEvent::ClearPosition(position, old_value)]
+    }
+
+    pub fn grow_snake(&mut self, snake: &Snake) -> Vec<WalkableUpdateEvent> {
+        let (tail_position, tail_direction) = snake.tail();
+        let new_part_position = tail_position - tail_direction;
+
+        self.mark_position_occupied(new_part_position, Walkable::Snake(snake.index()));
+        vec![WalkableUpdateEvent::FillPosition(new_part_position)]
+    }
+
+    pub fn clear_snake_positions(&mut self, snake: &Snake) -> Vec<WalkableUpdateEvent> {
+        let mut updates: Vec<WalkableUpdateEvent> = Vec::with_capacity(snake.len());
+        for (position, _) in snake.parts() {
+            let old_value = self.set_empty(*position).unwrap();
+            updates.push(WalkableUpdateEvent::ClearPosition(*position, old_value));
+        }
+        updates
+    }
+
+    pub fn mark_snake_positions(&mut self, snake: &Snake) -> Vec<WalkableUpdateEvent> {
+        let mut updates: Vec<WalkableUpdateEvent> = Vec::with_capacity(snake.len());
+        for (position, _) in snake.parts() {
+            self.mark_position_occupied(*position, Walkable::Snake(snake.index()));
+            updates.push(WalkableUpdateEvent::FillPosition(*position));
+        }
+        updates
+    }
+
+    pub fn undo_updates(&mut self, updates: &Vec<WalkableUpdateEvent>) {
+        for update in updates {
+            match update {
+                WalkableUpdateEvent::ClearPosition(position, value) => {
+                    self.mark_position_occupied(*position, *value);
+                }
+                WalkableUpdateEvent::FillPosition(position) => {
+                    self.set_empty(*position);
+                }
+            }
         }
     }
 
     pub fn can_push_snake(&self, snake: &Snake, direction: IVec2) -> bool {
-        snake.parts.iter().all(|(position, _)| {
+        snake.parts().iter().all(|(position, _)| {
             self.is_empty(*position + direction)
-                || self.is_snake_with_index(*position + direction, snake.index)
+                || self.is_snake_with_index(*position + direction, snake.index())
         })
     }
 
@@ -190,7 +271,7 @@ fn spawn_level_entities_system(
             })
             .insert(LevelEntity);
 
-        level_instance.mark_position_walkable(position, Walkable::Wall);
+        level_instance.mark_position_occupied(position, Walkable::Wall);
     }
 
     // Spawn the food sprites.
@@ -243,7 +324,7 @@ pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mu
         .insert(Food(*position))
         .insert(LevelEntity);
 
-    level_instance.mark_position_walkable(*position, Walkable::Food);
+    level_instance.mark_position_occupied(*position, Walkable::Food);
 }
 
 pub fn clear_level_system(
@@ -287,7 +368,7 @@ pub fn check_for_level_completion_system(
 
     if let Some(next_snake_entity) = other_snakes_query.iter().next() {
         commands.entity(entity).remove::<SelectedSnake>();
-        event_despawn_snake.send(DespawnSnakeEvent(snake.index));
+        event_despawn_snake.send(DespawnSnakeEvent(snake.index()));
 
         commands.entity(next_snake_entity).insert(SelectedSnake);
     } else {

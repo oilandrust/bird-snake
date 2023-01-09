@@ -114,20 +114,20 @@ fn debug_draw_snake_system(
     }
 
     for snake in query.iter() {
-        for position in &snake.parts {
+        for position in snake.parts() {
             let world_grid = to_world(position.0);
             let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
 
             lines.line_colored(
-                world_grid + Vec3::new(5.0, 5.0, 0.0),
-                world_grid + Vec3::new(-5.0, -5.0, 0.0),
+                world_grid + Vec3::new(5.0, 0.0, 0.0),
+                world_grid + Vec3::new(-5.0, 0.0, 0.0),
                 0.,
                 Color::BLUE,
             );
 
             lines.line_colored(
-                world_grid + Vec3::new(-5.0, 5.0, 0.0),
-                world_grid + Vec3::new(5.0, -5.0, 0.0),
+                world_grid + Vec3::new(0.0, 5.0, 0.0),
+                world_grid + Vec3::new(0.0, -5.0, 0.0),
                 0.,
                 Color::BLUE,
             );

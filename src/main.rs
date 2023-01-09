@@ -6,6 +6,7 @@ use level_pluggin::{LevelPluggin, StartLevelEvent};
 use movement_pluggin::MovementPluggin;
 use snake_pluggin::SnakePluggin;
 
+mod commands;
 mod dev_tools_pluggin;
 mod game_constants_pluggin;
 mod level_pluggin;
@@ -13,6 +14,7 @@ mod level_template;
 mod levels;
 mod movement_pluggin;
 mod snake_pluggin;
+mod undo;
 
 fn start_game(mut event_writer: EventWriter<StartLevelEvent>) {
     event_writer.send(StartLevelEvent(0));

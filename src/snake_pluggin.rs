@@ -3,13 +3,12 @@ use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use std::collections::VecDeque;
 
 use crate::{
+    commands::SnakeCommands,
     game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
     level_template::LevelTemplate,
-    movement_pluggin::{
-        update_sprite_positions_system, GravityFall, MoveHistoryEvent, SnakeHistory,
-        SnakeMovedEvent, UndoEvent,
-    },
+    movement_pluggin::{update_sprite_positions_system, GravityFall, SnakeMovedEvent},
+    undo::{SnakeHistory, UndoEvent},
 };
 
 pub struct SnakePluggin;
@@ -116,21 +115,54 @@ impl Lens<Transform> for GrowPartLens {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Snake {
-    pub parts: VecDeque<(IVec2, IVec2)>,
-    pub index: i32,
+    parts: VecDeque<(IVec2, IVec2)>,
+    index: i32,
 }
 
 pub struct SpawnSnakeEvent;
 
 impl Snake {
+    pub fn parts(&self) -> &VecDeque<(IVec2, IVec2)> {
+        &self.parts
+    }
+
+    pub fn index(&self) -> i32 {
+        self.index
+    }
+
     pub fn len(&self) -> usize {
         self.parts.len()
     }
 
+    pub fn move_back(&mut self, part: &(IVec2, IVec2)) {
+        self.parts.push_back(*part);
+        self.parts.pop_front();
+    }
+
+    pub fn move_forward(&mut self, direction: IVec2) {
+        self.parts
+            .push_front((self.head_position() + direction, direction));
+        self.parts.pop_back();
+    }
+
     pub fn head_position(&self) -> IVec2 {
         self.parts.front().unwrap().0
+    }
+
+    pub fn grow(&mut self) {
+        let (tail_position, tail_direction) = self.tail();
+        let new_part_position = tail_position - tail_direction;
+        self.parts.push_back((new_part_position, tail_direction));
+    }
+
+    pub fn shrink(&mut self) {
+        self.parts.pop_back();
+    }
+
+    pub fn tail(&self) -> (IVec2, IVec2) {
+        *self.parts.back().unwrap()
     }
 
     pub fn tail_position(&self) -> IVec2 {
@@ -203,7 +235,7 @@ pub fn spawn_snake_system(
         }
 
         for (position, _) in snake_template {
-            level_instance.mark_position_walkable(*position, Walkable::Snake(snake_index as i32));
+            level_instance.mark_position_occupied(*position, Walkable::Snake(snake_index as i32));
         }
     }
 }
@@ -254,6 +286,7 @@ pub fn select_snake_mouse_system(
 
 pub fn respawn_snake_on_fall_system(
     mut snake_history: ResMut<SnakeHistory>,
+    mut level: ResMut<LevelInstance>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
     mut commands: Commands,
     mut snake_query: Query<(Entity, &Snake, &GravityFall)>,
@@ -263,10 +296,8 @@ pub fn respawn_snake_on_fall_system(
             return;
         }
 
-        snake_history.push(
-            MoveHistoryEvent::Fall(gravity_fall.grid_distance),
-            snake.index,
-        );
+        let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
+        snake_commands.stop_falling(snake, gravity_fall.grid_distance);
 
         commands.entity(snake_entity).remove::<GravityFall>();
 
@@ -277,16 +308,14 @@ pub fn respawn_snake_on_fall_system(
 pub fn grow_snake_on_move_system(
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
     mut commands: Commands,
-    mut level: ResMut<LevelInstance>,
-    mut snake_history: ResMut<SnakeHistory>,
-    mut snake_query: Query<&mut Snake, With<SelectedSnake>>,
+    snake_query: Query<&Snake, With<SelectedSnake>>,
     foods_query: Query<(Entity, &Food), With<Food>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
     }
 
-    let mut snake = snake_query.single_mut();
+    let snake = snake_query.single();
 
     for (food_entity, food) in &foods_query {
         if food.0 != snake.head_position() {
@@ -296,12 +325,7 @@ pub fn grow_snake_on_move_system(
         commands.entity(food_entity).despawn();
 
         let tail_direction = snake.tail_direction();
-        let new_part_position = snake.tail_position() - tail_direction;
-        snake.parts.push_back((new_part_position, tail_direction));
-
-        level.mark_position_walkable(new_part_position, Walkable::Snake(snake.index));
-
-        snake_history.push(MoveHistoryEvent::Eat(food.0), snake.index);
+        let new_part_position = snake.tail_position();
 
         let grow_tween = Tween::new(
             EaseFunction::QuadraticInOut,
@@ -365,7 +389,6 @@ fn despawn_snake_system(
 fn despawn_snake_part_system(
     mut despawn_snake_part_event: EventReader<DespawnSnakePartEvent>,
     mut commands: Commands,
-    mut snake_query: Query<&mut Snake>,
     parts_query: Query<(Entity, &SnakePart)>,
 ) {
     for message in despawn_snake_part_event.iter() {
@@ -375,12 +398,6 @@ fn despawn_snake_part_system(
             }
 
             commands.entity(entity).despawn_recursive();
-            snake_query
-                .iter_mut()
-                .find(|snake| snake.index == part.snake_index)
-                .expect("Trying to despawn a part for a snake that is not found in query.")
-                .parts
-                .pop_back();
         }
     }
 }
