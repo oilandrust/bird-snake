@@ -9,7 +9,7 @@ use crate::{
     },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
-    movement_pluggin::{gravity_system, snake_movement_control_system, GravityFall},
+    movement_pluggin::GravityFall,
     snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
     undo::{SnakeHistory, WalkableUpdateEvent},
 };
@@ -345,6 +345,7 @@ pub fn clear_level_system(
     commands.remove_resource::<SnakeHistory>();
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn check_for_level_completion_system(
     mut history: ResMut<SnakeHistory>,
     mut level_instance: ResMut<LevelInstance>,

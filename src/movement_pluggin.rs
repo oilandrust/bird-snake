@@ -66,6 +66,7 @@ type WithMovementControlSystemFilter = (
     Without<GravityFall>,
 );
 
+#[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
     keyboard: Res<Input<KeyCode>>,
     mut level_instance: ResMut<LevelInstance>,
@@ -191,7 +192,7 @@ pub fn gravity_system(
                         if gravity_fall.grid_distance > 0 {
                             let mut snake_commands =
                                 SnakeCommands::new(&mut level, &mut snake_history);
-                            snake_commands.stop_falling(snake.as_ref(), gravity_fall.grid_distance);
+                            snake_commands.stop_falling(snake.as_ref());
                         }
                     }
                 }
@@ -229,6 +230,7 @@ fn snake_smooth_movement_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), With<Active>>,
     mut sprite_query: Query<(&mut Transform, &SnakePart)>,

@@ -199,16 +199,14 @@ impl Snake {
         }
     }
 
-    pub fn move_up(&mut self, distance: i32) {
-        for (position, _) in self.parts.iter_mut() {
-            *position += IVec2::Y * distance;
-        }
-    }
-
     pub fn translate(&mut self, offset: IVec2) {
         for (position, _) in self.parts.iter_mut() {
             *position += offset;
         }
+    }
+
+    pub fn set_parts(&mut self, parts: Vec<(IVec2, IVec2)>) {
+        self.parts = parts.into();
     }
 }
 
@@ -331,15 +329,15 @@ pub fn respawn_snake_on_fall_system(
     mut level: ResMut<LevelInstance>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
     mut commands: Commands,
-    mut snake_query: Query<(Entity, &Snake, &GravityFall)>,
+    mut snake_query: Query<(Entity, &Snake), With<GravityFall>>,
 ) {
-    for (snake_entity, snake, &gravity_fall) in snake_query.iter_mut() {
+    for (snake_entity, snake) in snake_query.iter_mut() {
         if snake.head_position().y >= -2 {
             return;
         }
 
         let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
-        snake_commands.stop_falling(snake, gravity_fall.grid_distance);
+        snake_commands.stop_falling(snake);
 
         commands.entity(snake_entity).remove::<GravityFall>();
 

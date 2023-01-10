@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     level_pluggin::{spawn_food, LevelInstance, Walkable},
+    level_template::SnakeTemplate,
     movement_pluggin::GravityFall,
     snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
 };
@@ -12,10 +13,18 @@ pub enum WalkableUpdateEvent {
     FillPosition(IVec2),
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct BeginFall {
+    // The initial position of the snake before falling.
+    pub parts: SnakeTemplate,
+
+    // An even that is set when the fall ends.
+    pub end: Option<EndFall>,
+}
+
 /// History event marking that a snake stops falling, with distance fallen.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct EndFall {
-    pub distance_fallen: i32,
     pub walkable_updates: Vec<WalkableUpdateEvent>,
 }
 
@@ -31,7 +40,7 @@ pub enum MoveHistoryEvent {
     PassiveSnakeMove(IVec2),
 
     /// History event marking that a snake starts falling.
-    BeginFall(Option<EndFall>),
+    BeginFall(BeginFall),
 
     /// History event marking that a snake grew.
     Grow,
@@ -100,8 +109,6 @@ impl SnakeHistory {
                 .find(|snake| snake.index() == top.snake_index)
                 .expect("Missing snake in query");
 
-            println!("{:?}. {:?}", top.event, top.walkable_updates);
-
             match top.event {
                 MoveHistoryEvent::PlayerSnakeMove => {
                     unreachable!("Should be handled as early return above.")
@@ -112,12 +119,11 @@ impl SnakeHistory {
                 MoveHistoryEvent::PassiveSnakeMove(offset) => {
                     snake.translate(-offset);
                 }
-                MoveHistoryEvent::BeginFall(None) => {
-                    // Nothing to do.
-                }
-                MoveHistoryEvent::BeginFall(Some(end_fall)) => {
-                    snake.move_up(end_fall.distance_fallen);
-                    level.undo_updates(&end_fall.walkable_updates);
+                MoveHistoryEvent::BeginFall(begin) => {
+                    snake.set_parts(begin.parts);
+                    if let Some(end) = begin.end {
+                        level.undo_updates(&end.walkable_updates);
+                    };
                 }
                 MoveHistoryEvent::Grow => {
                     despawn_snake_part_event.send(DespawnSnakePartEvent(SnakePart {
