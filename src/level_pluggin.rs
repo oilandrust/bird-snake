@@ -9,7 +9,7 @@ use crate::{
     },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
-    movement_pluggin::snake_movement_control_system,
+    movement_pluggin::{gravity_system, snake_movement_control_system, GravityFall},
     snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
     undo::{SnakeHistory, WalkableUpdateEvent},
 };
@@ -215,7 +215,7 @@ impl Plugin for LevelPluggin {
             )
             .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_system)
             .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
-            .add_system(check_for_level_completion_system.after(snake_movement_control_system))
+            .add_system_to_stage(CoreStage::PostUpdate, check_for_level_completion_system)
             .add_system_to_stage(CoreStage::Last, clear_level_system);
     }
 }
@@ -355,10 +355,10 @@ pub fn check_for_level_completion_system(
     mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
     mut exit: EventWriter<AppExit>,
     mut commands: Commands,
-    selected_snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
+    selected_snake_query: Query<(Entity, &Snake, Option<&GravityFall>), With<SelectedSnake>>,
     other_snakes_query: Query<Entity, (With<Snake>, Without<SelectedSnake>)>,
 ) {
-    let (entity, snake) = selected_snake_query.single();
+    let (entity, snake, fall) = selected_snake_query.single();
 
     if level.goal_position != snake.head_position() {
         return;
@@ -368,11 +368,13 @@ pub fn check_for_level_completion_system(
         commands
             .entity(entity)
             .remove::<SelectedSnake>()
-            .remove::<Active>();
+            .remove::<Active>()
+            .remove::<GravityFall>();
 
         event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
 
-        SnakeCommands::new(level_instance.as_mut(), history.as_mut()).exit_level(snake, entity);
+        SnakeCommands::new(level_instance.as_mut(), history.as_mut())
+            .exit_level(snake, entity, fall);
 
         commands.entity(next_snake_entity).insert(SelectedSnake);
     } else if level_id.0 == LEVELS.len() - 1 {

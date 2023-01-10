@@ -1,5 +1,6 @@
 use crate::{
     level_pluggin::{Food, LevelInstance},
+    movement_pluggin::GravityFall,
     snake_pluggin::Snake,
     undo::{EndFall, MoveHistoryEvent, SnakeHistory},
 };
@@ -33,8 +34,12 @@ impl<'a> SnakeCommands<'a> {
         }
     }
 
-    pub fn exit_level(&mut self, snake: &'a Snake, entity: Entity) {
-        let updates = self.level_instance.clear_snake_positions(snake);
+    pub fn exit_level(&mut self, snake: &'a Snake, entity: Entity, falling: Option<&GravityFall>) {
+        let updates = if falling.is_none() {
+            self.level_instance.clear_snake_positions(snake)
+        } else {
+            vec![]
+        };
 
         self.history
             .push_with_updates(MoveHistoryEvent::ExitLevel(entity), snake.index(), updates);

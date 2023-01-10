@@ -1,3 +1,7 @@
+Bugs:
+* Exit level on fall undo
+* Exit level by pushing snake.
+
 Eat and grow:
 * Level unlock Condition
 
@@ -12,7 +16,7 @@ Spikes
 Graphics:
 Whole new project!
 
-Research vector grphics in bevy
+Research vector graphics in bevy
 
 Level Editor
 

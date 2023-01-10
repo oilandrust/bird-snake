@@ -162,7 +162,7 @@ pub fn snake_movement_control_system(
     }
 }
 
-fn gravity_system(
+pub fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
     mut level: ResMut<LevelInstance>,

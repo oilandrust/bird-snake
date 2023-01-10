@@ -100,6 +100,8 @@ impl SnakeHistory {
                 .find(|snake| snake.index() == top.snake_index)
                 .expect("Missing snake in query");
 
+            println!("{:?}. {:?}", top.event, top.walkable_updates);
+
             match top.event {
                 MoveHistoryEvent::PlayerSnakeMove => {
                     unreachable!("Should be handled as early return above.")
