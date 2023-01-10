@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     level_pluggin::{spawn_food, LevelInstance, Walkable},
+    movement_pluggin::GravityFall,
     snake_pluggin::{DespawnSnakePartEvent, Snake, SnakePart},
 };
 
@@ -130,8 +131,13 @@ impl SnakeHistory {
 pub fn keyboard_undo_system(
     keyboard: Res<Input<KeyCode>>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
+    falling_snakes: Query<(With<Snake>, With<GravityFall>)>,
 ) {
     if !keyboard.just_pressed(KeyCode::Back) {
+        return;
+    }
+
+    if !falling_snakes.is_empty() {
         return;
     }
 

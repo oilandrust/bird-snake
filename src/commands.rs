@@ -5,9 +5,13 @@ use crate::{
 };
 use bevy::prelude::*;
 
+/// Provides commands that implement the undoable game mechanics.
+/// Commands manage the state of the game data such as snakes, food, etc..
+/// In addition they propagate the changes to the level instance that keep track of which object occupies which position.
+/// Finaly, commands make sure that the changes are generate undoable instructions that can be executed by the undo system.
 pub struct SnakeCommands<'a> {
-    pub level_instance: &'a mut LevelInstance,
-    pub history: &'a mut SnakeHistory,
+    level_instance: &'a mut LevelInstance,
+    history: &'a mut SnakeHistory,
 }
 
 impl<'a> SnakeCommands<'a> {
@@ -29,6 +33,7 @@ impl<'a> SnakeCommands<'a> {
         }
     }
 
+    /// Execute a command when a skake start falling.
     pub fn start_falling(&mut self, snake: &'a Snake) {
         let updates = self.level_instance.clear_snake_positions(snake);
 
