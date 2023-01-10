@@ -7,10 +7,6 @@ Controls:
 End of level:
 * animation
 
-Multi-Snake:
-* Switch snake controls
-* Pushing/carying snake mechanics
-
 Spikes
 
 Graphics:

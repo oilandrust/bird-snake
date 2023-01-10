@@ -6,7 +6,7 @@ use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
     level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
-    level_template::LevelTemplate,
+    level_template::{LevelTemplate, SnakeTemplate},
     movement_pluggin::{update_sprite_positions_system, GravityFall, SnakeMovedEvent},
     undo::{SnakeHistory, UndoEvent},
 };
@@ -17,6 +17,7 @@ impl Plugin for SnakePluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<DespawnSnakePartEvent>()
             .add_event::<DespawnSnakeEvent>()
+            .add_event::<DespawnSnakePartsEvent>()
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system(select_snake_mouse_system)
             .add_system_to_stage(
@@ -26,6 +27,10 @@ impl Plugin for SnakePluggin {
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 despawn_snake_system.after(update_sprite_positions_system),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_parts_system.after(update_sprite_positions_system),
             );
     }
 }
@@ -36,8 +41,14 @@ pub struct DespawnSnakePartEvent(pub SnakePart);
 #[derive(PartialEq, Eq)]
 pub struct DespawnSnakeEvent(pub i32);
 
+#[derive(PartialEq, Eq)]
+pub struct DespawnSnakePartsEvent(pub i32);
+
 #[derive(Component)]
 pub struct SelectedSnake;
+
+#[derive(Component)]
+pub struct Active;
 
 #[derive(Component, PartialEq, Eq)]
 pub struct SnakePart {
@@ -201,6 +212,52 @@ impl Snake {
     }
 }
 
+pub fn spawn_snake(
+    commands: &mut Commands,
+    level_instance: &mut LevelInstance,
+    snake_template: &SnakeTemplate,
+    snake_index: i32,
+) -> Entity {
+    for (index, part) in snake_template.iter().enumerate() {
+        commands
+            .spawn(SnakePartBundle::new(part.0, snake_index, index))
+            .with_children(|parent| {
+                parent.spawn(SnakePartSpriteBundle::new(
+                    Vec2::ONE,
+                    SNAKE_COLORS[snake_index as usize],
+                ));
+            });
+    }
+
+    let mut spawn_command = commands.spawn(Snake {
+        parts: VecDeque::from(snake_template.clone()),
+        index: snake_index,
+    });
+
+    spawn_command.insert(LevelEntity).insert(Active);
+
+    for (position, _) in snake_template {
+        level_instance.mark_position_occupied(*position, Walkable::Snake(snake_index));
+    }
+
+    spawn_command.id()
+}
+
+pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: Entity) {
+    for (index, part) in snake.parts().iter().enumerate() {
+        commands
+            .spawn(SnakePartBundle::new(part.0, snake.index(), index))
+            .with_children(|parent| {
+                parent.spawn(SnakePartSpriteBundle::new(
+                    Vec2::ONE,
+                    SNAKE_COLORS[snake.index() as usize],
+                ));
+            });
+    }
+
+    commands.entity(snake_entity).insert(Active);
+}
+
 pub fn spawn_snake_system(
     level: Res<LevelTemplate>,
     mut level_instance: ResMut<LevelInstance>,
@@ -212,30 +269,15 @@ pub fn spawn_snake_system(
     }
 
     for (snake_index, snake_template) in level.initial_snakes.iter().enumerate() {
-        for (index, part) in snake_template.iter().enumerate() {
-            commands
-                .spawn(SnakePartBundle::new(part.0, snake_index as i32, index))
-                .with_children(|parent| {
-                    parent.spawn(SnakePartSpriteBundle::new(
-                        Vec2::ONE,
-                        SNAKE_COLORS[snake_index],
-                    ));
-                });
-        }
-
-        let mut spawn_command = commands.spawn(Snake {
-            parts: VecDeque::from(snake_template.clone()),
-            index: snake_index as i32,
-        });
-
-        spawn_command.insert(LevelEntity);
+        let entity = spawn_snake(
+            &mut commands,
+            &mut level_instance,
+            snake_template,
+            snake_index as i32,
+        );
 
         if snake_index == 0 {
-            spawn_command.insert(SelectedSnake);
-        }
-
-        for (position, _) in snake_template {
-            level_instance.mark_position_occupied(*position, Walkable::Snake(snake_index as i32));
+            commands.entity(entity).insert(SelectedSnake);
         }
     }
 }
@@ -375,6 +417,23 @@ fn despawn_snake_system(
             }
         }
 
+        // Despawn parts
+        for (entity, part) in parts_query.iter() {
+            if part.snake_index != message.0 {
+                continue;
+            }
+
+            commands.entity(entity).despawn_recursive();
+        }
+    }
+}
+
+fn despawn_snake_parts_system(
+    mut despawn_snake_event: EventReader<DespawnSnakePartsEvent>,
+    mut commands: Commands,
+    parts_query: Query<(Entity, &SnakePart)>,
+) {
+    for message in despawn_snake_event.iter() {
         // Despawn parts
         for (entity, part) in parts_query.iter() {
             if part.snake_index != message.0 {

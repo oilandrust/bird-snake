@@ -33,6 +33,13 @@ impl<'a> SnakeCommands<'a> {
         }
     }
 
+    pub fn exit_level(&mut self, snake: &'a Snake, entity: Entity) {
+        let updates = self.level_instance.clear_snake_positions(snake);
+
+        self.history
+            .push_with_updates(MoveHistoryEvent::ExitLevel(entity), snake.index(), updates);
+    }
+
     /// Execute a command when a skake start falling.
     pub fn start_falling(&mut self, snake: &'a Snake) {
         let updates = self.level_instance.clear_snake_positions(snake);

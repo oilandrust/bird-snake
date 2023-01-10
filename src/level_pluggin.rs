@@ -3,13 +3,14 @@ use std::collections::VecDeque;
 use bevy::{app::AppExit, prelude::*, utils::HashMap};
 
 use crate::{
+    commands::SnakeCommands,
     game_constants_pluggin::{
         to_world, BRIGHT_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT, WALL_COLOR,
     },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
     movement_pluggin::snake_movement_control_system,
-    snake_pluggin::{DespawnSnakeEvent, SelectedSnake, Snake, SpawnSnakeEvent},
+    snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
     undo::{SnakeHistory, WalkableUpdateEvent},
 };
 
@@ -345,11 +346,13 @@ pub fn clear_level_system(
 }
 
 pub fn check_for_level_completion_system(
+    mut history: ResMut<SnakeHistory>,
+    mut level_instance: ResMut<LevelInstance>,
     level: Res<LevelTemplate>,
     level_id: Res<CurrentLevelId>,
     mut event_start_level: EventWriter<StartLevelEvent>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
-    mut event_despawn_snake: EventWriter<DespawnSnakeEvent>,
+    mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
     mut exit: EventWriter<AppExit>,
     mut commands: Commands,
     selected_snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
@@ -361,16 +364,19 @@ pub fn check_for_level_completion_system(
         return;
     }
 
-    if level_id.0 == LEVELS.len() - 1 {
-        exit.send(AppExit);
-        return;
-    }
-
     if let Some(next_snake_entity) = other_snakes_query.iter().next() {
-        commands.entity(entity).remove::<SelectedSnake>();
-        event_despawn_snake.send(DespawnSnakeEvent(snake.index()));
+        commands
+            .entity(entity)
+            .remove::<SelectedSnake>()
+            .remove::<Active>();
+
+        event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
+
+        SnakeCommands::new(level_instance.as_mut(), history.as_mut()).exit_level(snake, entity);
 
         commands.entity(next_snake_entity).insert(SelectedSnake);
+    } else if level_id.0 == LEVELS.len() - 1 {
+        exit.send(AppExit);
     } else {
         event_clear_level.send(ClearLevelEvent);
         event_start_level.send(StartLevelEvent(level_id.0 + 1));

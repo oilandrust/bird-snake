@@ -5,8 +5,8 @@ use crate::{
     game_constants_pluggin::*,
     level_pluggin::{Food, LevelInstance},
     snake_pluggin::{
-        grow_snake_on_move_system, respawn_snake_on_fall_system, SelectedSnake, Snake, SnakePart,
-        SpawnSnakeEvent,
+        grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
+        SnakePart, SpawnSnakeEvent,
     },
     undo::{keyboard_undo_system, undo_event_system, SnakeHistory},
 };
@@ -61,6 +61,7 @@ fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
 
 type WithMovementControlSystemFilter = (
     With<SelectedSnake>,
+    With<Active>,
     Without<MoveCommand>,
     Without<GravityFall>,
 );
@@ -167,7 +168,7 @@ fn gravity_system(
     mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>)>,
+    mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>), With<Active>>,
 ) {
     for (snake_entity, mut snake, gravity_fall) in query.iter_mut() {
         match gravity_fall {
@@ -229,7 +230,7 @@ fn snake_smooth_movement_system(
 }
 
 pub fn update_sprite_positions_system(
-    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>)>,
+    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), With<Active>>,
     mut sprite_query: Query<(&mut Transform, &SnakePart)>,
 ) {
     for (snake, move_command, gravity_fall) in snake_query.iter() {

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     level_pluggin::{spawn_food, LevelInstance, Walkable},
     movement_pluggin::GravityFall,
-    snake_pluggin::{DespawnSnakePartEvent, Snake, SnakePart},
+    snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -33,8 +33,14 @@ pub enum MoveHistoryEvent {
     /// History event marking that a snake starts falling.
     BeginFall(Option<EndFall>),
 
+    /// History event marking that a snake grew.
     Grow,
+
+    /// History event when a snake eats a food and the food is despawned.
     Eat(IVec2),
+
+    /// History event for a snake exiting the level through the goal.
+    ExitLevel(Entity),
 }
 
 #[derive(Clone)]
@@ -81,6 +87,8 @@ impl SnakeHistory {
         commands: &mut Commands,
         despawn_snake_part_event: &mut EventWriter<DespawnSnakePartEvent>,
     ) {
+        let mut snakes: Vec<&mut Snake> = snakes.iter_mut().map(|snake| snake.as_mut()).collect();
+
         // Undo the stack until we reach the last player action.
         while let Some(top) = self.move_history.pop() {
             if MoveHistoryEvent::PlayerSnakeMove == top.event {
@@ -90,8 +98,7 @@ impl SnakeHistory {
             let snake: &mut Snake = snakes
                 .iter_mut()
                 .find(|snake| snake.index() == top.snake_index)
-                .expect("Missing snake in query")
-                .as_mut();
+                .expect("Missing snake in query");
 
             match top.event {
                 MoveHistoryEvent::PlayerSnakeMove => {
@@ -120,6 +127,9 @@ impl SnakeHistory {
                 }
                 MoveHistoryEvent::Eat(position) => {
                     spawn_food(commands, &position, level);
+                }
+                MoveHistoryEvent::ExitLevel(snake_entity) => {
+                    set_snake_active(commands, snake, snake_entity);
                 }
             }
 
