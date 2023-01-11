@@ -345,7 +345,7 @@ pub fn clear_level_system(
     commands.remove_resource::<SnakeHistory>();
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn check_for_level_completion_system(
     mut history: ResMut<SnakeHistory>,
     mut level_instance: ResMut<LevelInstance>,
@@ -356,32 +356,50 @@ pub fn check_for_level_completion_system(
     mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
     mut exit: EventWriter<AppExit>,
     mut commands: Commands,
-    selected_snake_query: Query<(Entity, &Snake, Option<&GravityFall>), With<SelectedSnake>>,
-    other_snakes_query: Query<Entity, (With<Snake>, Without<SelectedSnake>)>,
+    snakes_query: Query<
+        (Entity, &Snake, Option<&GravityFall>, Option<&SelectedSnake>),
+        With<Active>,
+    >,
 ) {
-    let (entity, snake, fall) = selected_snake_query.single();
-
-    if level.goal_position != snake.head_position() {
+    let snake_at_exit = snakes_query
+        .iter()
+        .find(|(_, snake, _, _)| level.goal_position == snake.head_position());
+    if snake_at_exit.is_none() {
         return;
     }
 
-    if let Some(next_snake_entity) = other_snakes_query.iter().next() {
-        commands
-            .entity(entity)
-            .remove::<SelectedSnake>()
-            .remove::<Active>()
-            .remove::<GravityFall>();
+    if snakes_query.iter().len() == 1 {
+        if level_id.0 == LEVELS.len() - 1 {
+            exit.send(AppExit);
+        } else {
+            event_clear_level.send(ClearLevelEvent);
+            event_start_level.send(StartLevelEvent(level_id.0 + 1));
+        }
+        return;
+    }
 
-        event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
+    let Some((entity, snake, fall, selected)) = snake_at_exit else {
+        return;
+    };
 
-        SnakeCommands::new(level_instance.as_mut(), history.as_mut())
-            .exit_level(snake, entity, fall);
+    commands
+        .entity(entity)
+        .remove::<SelectedSnake>()
+        .remove::<Active>()
+        .remove::<GravityFall>();
 
-        commands.entity(next_snake_entity).insert(SelectedSnake);
-    } else if level_id.0 == LEVELS.len() - 1 {
-        exit.send(AppExit);
-    } else {
-        event_clear_level.send(ClearLevelEvent);
-        event_start_level.send(StartLevelEvent(level_id.0 + 1));
+    event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
+
+    SnakeCommands::new(level_instance.as_mut(), history.as_mut()).exit_level(snake, entity, fall);
+
+    //   Select another snake if the snake was selected.
+    if selected.is_some() {
+        let other_snake = snakes_query
+            .iter()
+            .find(|(other_entity, _, _, _)| entity != *other_entity);
+
+        if let Some((next_snake_entity, _, _, _)) = other_snake {
+            commands.entity(next_snake_entity).insert(SelectedSnake);
+        }
     }
 }

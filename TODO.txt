@@ -1,6 +1,5 @@
 Bugs:
-* Exit level on fall undo
-* Exit level by pushing snake.
+* Crash and second exit
 
 Eat and grow:
 * Level unlock Condition
