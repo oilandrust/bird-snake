@@ -178,36 +178,38 @@ pub fn gravity_system(
                 gravity_fall.velocity -= constants.gravity * time.delta_seconds();
                 gravity_fall.relative_y += gravity_fall.velocity * time.delta_seconds();
 
-                // When relative y is 0, the sprites are aligned with the actual position.
-                if gravity_fall.relative_y < 0.0 {
-                    // keep falling..
-                    if min_distance_to_ground(&level, &snake) > 1 {
-                        gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
-                        gravity_fall.grid_distance += 1;
+                // While relative y is positive, we haven't moved fully into the cell.
+                if gravity_fall.relative_y >= 0.0 {
+                    continue;
+                }
 
-                        snake.fall_one_unit();
-                    } else {
-                        // ..or stop falling animation.
-                        commands.entity(snake_entity).remove::<GravityFall>();
+                // keep falling..
+                if min_distance_to_ground(&level, &snake) > 1 {
+                    gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
+                    gravity_fall.grid_distance += 1;
 
-                        if gravity_fall.grid_distance > 0 {
-                            // Check if we fell on spikes, if, so trigger undo.
-                            for (position, _) in snake.parts() {
-                                if !level.is_spike(*position) {
-                                    continue;
-                                }
+                    snake.fall_one_unit();
+                } else {
+                    // ..or stop falling animation.
+                    commands.entity(snake_entity).remove::<GravityFall>();
 
-                                commands.entity(snake_entity).remove::<GravityFall>();
-
-                                trigger_undo_event.send(UndoEvent);
-                                return;
-                            }
-
-                            let mut snake_commands =
-                                SnakeCommands::new(&mut level, &mut snake_history);
-                            snake_commands.stop_falling(snake.as_ref());
-                        }
+                    // Nothing to do if we fell less than an unit, meaning we stayed at the same place.
+                    if gravity_fall.grid_distance == 0 {
+                        return;
                     }
+
+                    // Check if we fell on spikes, if, so trigger undo.
+                    for (position, _) in snake.parts() {
+                        if !level.is_spike(*position) {
+                            continue;
+                        }
+
+                        trigger_undo_event.send(UndoEvent);
+                        return;
+                    }
+
+                    let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
+                    snake_commands.stop_falling(snake.as_ref());
                 }
             }
             None => {
