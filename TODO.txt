@@ -1,16 +1,16 @@
-Bugs:
-* Crash and second exit
+Basic game:
+    Eat and grow:
+    * Level unlock Condition
 
-Eat and grow:
-* Level unlock Condition
+    Controls:
+    * Reset level
 
-Controls:
-* Reset level
+    End of level:
+    * animation
 
-End of level:
-* animation
+    20 levels
 
-Spikes
+Menu:
 
 Graphics:
 Whole new project!
@@ -18,6 +18,3 @@ Whole new project!
 Research vector graphics in bevy
 
 Level Editor
-
-Polish:
-Move and jump anim

@@ -144,7 +144,7 @@ fn debug_draw_level_cells(
         return;
     }
 
-    for (position, value) in level.walkable_positions() {
+    for (position, value) in level.occupied_cells() {
         let world_grid = to_world(*position);
         let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
 
@@ -152,6 +152,7 @@ fn debug_draw_level_cells(
             crate::level_pluggin::Walkable::Food => Color::RED,
             crate::level_pluggin::Walkable::Wall => Color::BLACK,
             crate::level_pluggin::Walkable::Snake(_) => Color::BLUE,
+            crate::level_pluggin::Walkable::Spike => Color::DARK_GRAY,
         };
 
         lines.line_colored(

@@ -5,7 +5,8 @@ use bevy::{app::AppExit, prelude::*, utils::HashMap};
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{
-        to_world, BRIGHT_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT, WALL_COLOR,
+        to_world, BRIGHT_COLOR_PALETTE, DARK_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT,
+        WALL_COLOR,
     },
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
@@ -23,6 +24,9 @@ pub struct LevelEntity;
 #[derive(Component, Clone, Copy)]
 pub struct Food(pub IVec2);
 
+#[derive(Component, Clone, Copy)]
+pub struct Spike(pub IVec2);
+
 #[derive(Resource)]
 pub struct CurrentLevelId(usize);
 
@@ -31,44 +35,58 @@ pub struct LevelPluggin;
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum Walkable {
     Food,
+    Spike,
     Wall,
     Snake(i32),
 }
 
 #[derive(Resource)]
 pub struct LevelInstance {
-    walkable_positions: HashMap<IVec2, Walkable>,
+    occupied_cells: HashMap<IVec2, Walkable>,
 }
 
 impl LevelInstance {
     pub fn new() -> Self {
         LevelInstance {
-            walkable_positions: HashMap::new(),
+            occupied_cells: HashMap::new(),
         }
     }
 
-    pub fn walkable_positions(&self) -> &HashMap<IVec2, Walkable> {
-        &self.walkable_positions
+    pub fn occupied_cells(&self) -> &HashMap<IVec2, Walkable> {
+        &self.occupied_cells
     }
 
     pub fn is_empty(&self, position: IVec2) -> bool {
-        !self.walkable_positions.contains_key(&position)
+        !self.occupied_cells.contains_key(&position)
+    }
+
+    pub fn is_empty_or_spike(&self, position: IVec2) -> bool {
+        !self.occupied_cells.contains_key(&position) || self.is_spike(position)
     }
 
     pub fn set_empty(&mut self, position: IVec2) -> Option<Walkable> {
-        self.walkable_positions.remove(&position)
+        self.occupied_cells.remove(&position)
     }
 
     pub fn mark_position_occupied(&mut self, position: IVec2, value: Walkable) {
-        self.walkable_positions.insert(position, value);
+        if let Some(cell) = self.occupied_cells.get(&position) {
+            if matches!(cell, Walkable::Spike) {
+                panic!("ddd");
+            }
+        }
+        self.occupied_cells.insert(position, value);
     }
 
     pub fn is_food(&self, position: IVec2) -> bool {
-        matches!(self.walkable_positions.get(&position), Some(Walkable::Food))
+        matches!(self.occupied_cells.get(&position), Some(Walkable::Food))
+    }
+
+    pub fn is_spike(&self, position: IVec2) -> bool {
+        matches!(self.occupied_cells.get(&position), Some(Walkable::Spike))
     }
 
     pub fn is_snake(&self, position: IVec2) -> Option<i32> {
-        let walkable = self.walkable_positions.get(&position);
+        let walkable = self.occupied_cells.get(&position);
         match walkable {
             Some(Walkable::Snake(index)) => Some(*index),
             _ => None,
@@ -169,15 +187,16 @@ impl LevelInstance {
     }
 
     pub fn is_snake_with_index(&self, position: IVec2, snake_index: i32) -> bool {
-        let walkable = self.walkable_positions.get(&position);
+        let walkable = self.occupied_cells.get(&position);
         match walkable {
             Some(Walkable::Snake(index)) => *index == snake_index,
             _ => false,
         }
     }
 
-    pub fn is_wall(&self, position: IVec2) -> bool {
-        matches!(self.walkable_positions.get(&position), Some(Walkable::Wall))
+    pub fn is_wall_or_spike(&self, position: IVec2) -> bool {
+        matches!(self.occupied_cells.get(&position), Some(Walkable::Wall))
+            || matches!(self.occupied_cells.get(&position), Some(Walkable::Spike))
     }
 
     pub fn get_distance_to_ground(&self, position: IVec2, snake_index: i32) -> i32 {
@@ -186,7 +205,7 @@ impl LevelInstance {
         const ARBITRARY_HIGH_DISTANCE: i32 = 50;
 
         let mut current_position = position + IVec2::NEG_Y;
-        while self.is_empty(current_position)
+        while self.is_empty_or_spike(current_position)
             || self.is_snake_with_index(current_position, snake_index)
         {
             current_position += IVec2::NEG_Y;
@@ -280,6 +299,11 @@ fn spawn_level_entities_system(
         spawn_food(&mut commands, position, &mut level_instance);
     }
 
+    // Spawn the spikes sprites.
+    for position in &level_template.spike_positions {
+        spawn_spike(&mut commands, position, &mut level_instance);
+    }
+
     // Spawn level goal sprite.
     commands
         .spawn(SpriteBundle {
@@ -306,6 +330,26 @@ fn spawn_level_entities_system(
             ..default()
         })
         .insert(LevelEntity);
+}
+
+pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                color: DARK_COLOR_PALETTE[3],
+                custom_size: Some(0.5 * GRID_CELL_SIZE),
+                ..default()
+            },
+            transform: Transform {
+                translation: to_world(*position).extend(0.0),
+                ..default()
+            },
+            ..default()
+        })
+        .insert(Spike(*position))
+        .insert(LevelEntity);
+
+    level_instance.mark_position_occupied(*position, Walkable::Spike);
 }
 
 pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {

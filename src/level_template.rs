@@ -20,6 +20,9 @@ pub enum Cell {
     #[cell('X')]
     Goal,
 
+    #[cell('+')]
+    Spike,
+
     #[cell('A'..='Z')]
     SnakeHead(char),
 
@@ -36,6 +39,7 @@ pub struct LevelTemplate {
     pub goal_position: IVec2,
     pub initial_snakes: Vec<SnakeTemplate>,
     pub food_positions: Vec<IVec2>,
+    pub spike_positions: Vec<IVec2>,
 }
 
 #[derive(Debug, Error)]
@@ -154,11 +158,24 @@ impl LevelTemplate {
             grid.set_cell(*position, Cell::Empty);
         }
 
+        // Find the spikes positons.
+        let spike_positions: Vec<IVec2> = grid
+            .iter()
+            .filter(|(_, cell)| *cell == Cell::Spike)
+            .map(|(position, _)| position)
+            .collect();
+
+        // And set empty.
+        for position in &spike_positions {
+            grid.set_cell(*position, Cell::Empty);
+        }
+
         Ok(LevelTemplate {
             grid,
             goal_position,
             initial_snakes: snakes,
             food_positions,
+            spike_positions,
         })
     }
 }

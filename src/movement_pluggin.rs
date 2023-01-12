@@ -8,7 +8,7 @@ use crate::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SnakePart, SpawnSnakeEvent,
     },
-    undo::{keyboard_undo_system, undo_event_system, SnakeHistory},
+    undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -111,7 +111,7 @@ pub fn snake_movement_control_system(
     }
 
     // Check for collition with self and walls.
-    if snake.occupies_position(new_position) || level_instance.is_wall(new_position) {
+    if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
         return;
     }
 
@@ -168,6 +168,7 @@ pub fn gravity_system(
     constants: Res<GameConstants>,
     mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
+    mut trigger_undo_event: EventWriter<UndoEvent>,
     mut commands: Commands,
     mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>), With<Active>>,
 ) {
@@ -190,6 +191,18 @@ pub fn gravity_system(
                         commands.entity(snake_entity).remove::<GravityFall>();
 
                         if gravity_fall.grid_distance > 0 {
+                            // Check if we fell on spikes, if, so trigger undo.
+                            for (position, _) in snake.parts() {
+                                if !level.is_spike(*position) {
+                                    continue;
+                                }
+
+                                commands.entity(snake_entity).remove::<GravityFall>();
+
+                                trigger_undo_event.send(UndoEvent);
+                                return;
+                            }
+
                             let mut snake_commands =
                                 SnakeCommands::new(&mut level, &mut snake_history);
                             snake_commands.stop_falling(snake.as_ref());
