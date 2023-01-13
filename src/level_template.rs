@@ -88,7 +88,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
                 if grid.cell_at(new_position) == Cell::SnakePart(part_char) {
                     parts.push(new_position);
                     current_position = new_position;
-                    continue;
+                    break;
                 }
             }
         }
@@ -177,5 +177,26 @@ impl LevelTemplate {
             food_positions,
             spike_positions,
         })
+    }
+}
+
+const LEVEL: &str = "
+..A.....
+#.aBbb..
+#.aa..X.
+#..#...";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    pub fn test_snake_extraction_complex() {
+        let level = LevelTemplate::parse(LEVEL);
+        assert!(level.is_ok());
+        let level = level.unwrap();
+        assert_eq!(level.initial_snakes.len(), 2);
+        assert_eq!(level.initial_snakes[0].len(), 3);
+        assert_eq!(level.initial_snakes[1].len(), 4);
     }
 }

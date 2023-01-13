@@ -69,11 +69,6 @@ impl LevelInstance {
     }
 
     pub fn mark_position_occupied(&mut self, position: IVec2, value: Walkable) {
-        if let Some(cell) = self.occupied_cells.get(&position) {
-            if matches!(cell, Walkable::Spike) {
-                panic!("ddd");
-            }
-        }
         self.occupied_cells.insert(position, value);
     }
 

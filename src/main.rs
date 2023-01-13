@@ -17,7 +17,7 @@ mod snake_pluggin;
 mod undo;
 
 fn start_game(mut event_writer: EventWriter<StartLevelEvent>) {
-    event_writer.send(StartLevelEvent(0));
+    event_writer.send(StartLevelEvent(7));
 }
 
 fn main() {
