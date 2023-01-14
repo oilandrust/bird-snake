@@ -15,7 +15,8 @@ use crate::{
     undo::{SnakeHistory, WalkableUpdateEvent},
 };
 
-pub struct StartLevelEvent(pub usize);
+pub struct StartLevelEventWithIndex(pub usize);
+pub struct StartLevelEventWithLevel(pub String);
 pub struct ClearLevelEvent;
 
 #[derive(Component)]
@@ -28,7 +29,7 @@ pub struct Food(pub IVec2);
 pub struct Spike(pub IVec2);
 
 #[derive(Resource)]
-pub struct CurrentLevelId(usize);
+pub struct CurrentLevelId(pub usize);
 
 pub struct LevelPluggin;
 
@@ -216,48 +217,67 @@ impl LevelInstance {
     }
 }
 
-static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
+pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
 
 impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
-        app.add_event::<StartLevelEvent>()
+        app.add_event::<StartLevelEventWithIndex>()
+            .add_event::<StartLevelEventWithLevel>()
             .add_event::<ClearLevelEvent>()
             .add_stage_before(
                 CoreStage::PreUpdate,
                 LOAD_LEVEL_STAGE,
                 SystemStage::single_threaded(),
             )
-            .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_system)
+            .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_with_index_system)
+            .add_system_to_stage(
+                LOAD_LEVEL_STAGE,
+                load_level_system.after(load_level_with_index_system),
+            )
             .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
             .add_system_to_stage(CoreStage::PostUpdate, check_for_level_completion_system)
             .add_system_to_stage(CoreStage::Last, clear_level_system);
     }
 }
 
-fn load_level_system(
+fn load_level_with_index_system(
     mut commands: Commands,
-    mut event_start_level: EventReader<StartLevelEvent>,
+    mut event_start_level_with_index: EventReader<StartLevelEventWithIndex>,
+    mut event_start_level: EventWriter<StartLevelEventWithLevel>,
+) {
+    let Some(event) = event_start_level_with_index.iter().next() else {
+        return;
+    };
+
+    let next_level_index = event.0;
+    event_start_level.send(StartLevelEventWithLevel(
+        LEVELS[next_level_index].to_owned(),
+    ));
+
+    commands.insert_resource(CurrentLevelId(next_level_index));
+}
+
+pub fn load_level_system(
+    mut commands: Commands,
+    mut event_start_level: EventReader<StartLevelEventWithLevel>,
     mut spawn_snake_event: EventWriter<SpawnSnakeEvent>,
 ) {
     let Some(event) = event_start_level.iter().next() else {
         return;
     };
 
-    let next_level_index = event.0;
-    let level = LevelTemplate::parse(LEVELS[next_level_index]).unwrap();
+    let level = LevelTemplate::parse(&event.0).unwrap();
 
     commands.insert_resource(SnakeHistory::default());
-
     commands.insert_resource(level);
     commands.insert_resource(LevelInstance::new());
-    commands.insert_resource(CurrentLevelId(next_level_index));
 
     spawn_snake_event.send(SpawnSnakeEvent);
 }
 
 fn spawn_level_entities_system(
     mut commands: Commands,
-    mut event_start_level: EventReader<StartLevelEvent>,
+    mut event_start_level: EventReader<StartLevelEventWithLevel>,
     level_template: Res<LevelTemplate>,
     mut level_instance: ResMut<LevelInstance>,
 ) {
@@ -390,7 +410,7 @@ pub fn check_for_level_completion_system(
     mut level_instance: ResMut<LevelInstance>,
     level: Res<LevelTemplate>,
     level_id: Res<CurrentLevelId>,
-    mut event_start_level: EventWriter<StartLevelEvent>,
+    mut event_start_level: EventWriter<StartLevelEventWithIndex>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
     mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
     mut exit: EventWriter<AppExit>,
@@ -412,7 +432,7 @@ pub fn check_for_level_completion_system(
             exit.send(AppExit);
         } else {
             event_clear_level.send(ClearLevelEvent);
-            event_start_level.send(StartLevelEvent(level_id.0 + 1));
+            event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
         }
         return;
     }

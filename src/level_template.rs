@@ -5,6 +5,8 @@ use bevy::{prelude::*, utils::HashSet};
 use game_grid::*;
 use thiserror::Error;
 
+use crate::game_constants_pluggin::{DOWN, LEFT, RIGHT, UP};
+
 #[derive(GridCell, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum Cell {
     #[cell('#')]
@@ -72,7 +74,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
     {
         let mut visited = HashSet::<IVec2>::new();
         let mut current_position = start_head_position;
-        let search_dirs = vec![IVec2::Y, IVec2::NEG_Y, IVec2::X, IVec2::NEG_X];
+        let search_dirs = vec![UP, DOWN, RIGHT, LEFT];
 
         while !visited.contains(&current_position)
             && (grid.cell_at(current_position) == Cell::SnakeHead(head_char)

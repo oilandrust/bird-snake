@@ -9,6 +9,11 @@ pub const MOVE_START_VELOCITY: f32 = 4.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
 pub const GRAVITY: f32 = 300.0;
 
+pub const UP: IVec2 = IVec2::Y;
+pub const DOWN: IVec2 = IVec2::NEG_Y;
+pub const RIGHT: IVec2 = IVec2::X;
+pub const LEFT: IVec2 = IVec2::NEG_X;
+
 // https://coolors.co/palette/565264-706677-a6808c-ccb7ae-d6cfcb
 pub const DARK_COLOR_PALETTE: [Color; 5] = [
     Color::rgb(0.3372549, 0.32156864, 0.39215687),

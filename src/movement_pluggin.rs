@@ -32,7 +32,7 @@ pub struct GravityFall {
 
 pub struct MovementPluggin;
 
-pub struct MoveCommandEvent(IVec2);
+pub struct MoveCommandEvent(pub IVec2);
 
 pub struct SnakeMovedEvent;
 
