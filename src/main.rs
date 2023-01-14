@@ -1,4 +1,4 @@
-use automated_test_pluggin::AutomatedTestPluggin;
+use automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
@@ -19,15 +19,39 @@ mod snake_pluggin;
 mod test_levels;
 mod undo;
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
+
+/// Cli API.
+/// Run a level
+/// ./snake-bird -l 0
+/// ./snake-bird --level 0
+/// Run a test level
+/// ./snake-bird -t 0
+/// ./snake-bird --test_level 0
+/// // Run the automated tests
+/// ./snake-bird test
+/// // Run the automated tests for a specific test case
+/// ./snake-bird -t 0 test
 
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(short, long, default_value_t = 0)]
-    level: usize,
+    #[arg(short, long)]
+    level: Option<usize>,
 
-    #[arg(long, default_value_t = false)]
-    test: bool,
+    #[arg(short, long)]
+    test_level: Option<usize>,
+
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Run automated tests.
+    Test {
+        #[arg(short, long)]
+        test_case: Option<usize>,
+    },
 }
 
 fn main() {
@@ -53,15 +77,26 @@ fn main() {
         .add_plugin(MovementPluggin)
         .add_system(bevy::window::close_on_esc);
 
-    let start_level = args.level;
-    let start_game = move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
-        event_writer.send(StartLevelEventWithIndex(start_level));
-    };
+    match args.command {
+        Some(Commands::Test { test_case }) => {
+            app.add_plugin(AutomatedTestPluggin);
 
-    if args.test {
-        app.add_plugin(AutomatedTestPluggin);
-    } else {
-        app.add_startup_system(start_game);
+            let start_test_case =
+                move |mut event_writer: EventWriter<StartTestCaseEventWithIndex>| {
+                    let start_test_case = test_case.unwrap_or(0);
+                    event_writer.send(StartTestCaseEventWithIndex(start_test_case));
+                };
+            app.add_startup_system(start_test_case);
+        }
+        None => {
+            let start_level = args.level;
+            let start_game = move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
+                let start_level = start_level.unwrap_or(0);
+                event_writer.send(StartLevelEventWithIndex(start_level));
+            };
+
+            app.add_startup_system(start_game);
+        }
     };
 
     app.run();

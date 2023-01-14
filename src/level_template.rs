@@ -83,7 +83,7 @@ fn extract_snake_template(grid: &Grid<Cell>, start_head_index: usize) -> Result<
             visited.insert(current_position);
             for search_dir in search_dirs.iter() {
                 let new_position = current_position + *search_dir;
-                if visited.contains(&new_position) {
+                if !grid.is_in_bounds(new_position) || visited.contains(&new_position) {
                     continue;
                 }
 

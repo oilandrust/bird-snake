@@ -34,22 +34,23 @@ macro_rules! test_case {
     };
 }
 
-fn intialize_test_cases() -> TestCases {
-    TestCases {
-        cases: vec![
-            test_case!(REACH_GOAL_FALLING, RIGHT,),
-            test_case!(FALL_ON_SPIKE, RIGHT, RIGHT,),
-        ],
-    }
+macro_rules! test_cases {
+    ($($case:expr,)*) => {
+        TestCases {
+            cases: vec![
+                $($case,)*
+            ],
+        }
+    };
 }
 
-struct StartTestCaseEvent;
+pub struct StartTestCaseEventWithIndex(pub usize);
 
 pub struct AutomatedTestPluggin;
 
 impl Plugin for AutomatedTestPluggin {
     fn build(&self, app: &mut App) {
-        app.add_event::<StartTestCaseEvent>()
+        app.add_event::<StartTestCaseEventWithIndex>()
             .add_startup_system(init_automation)
             .add_system_set(
                 SystemSet::new()
@@ -72,26 +73,28 @@ fn moc_player_input(
 }
 
 fn start_test_case(
-    current_level_id: Res<CurrentLevelId>,
     test_cases: Res<TestCases>,
     mut commands: Commands,
     mut event_start_level: EventWriter<StartLevelEventWithLevel>,
-    mut event_reader: EventReader<StartTestCaseEvent>,
+    mut event_reader: EventReader<StartTestCaseEventWithIndex>,
 ) {
-    let Some(_) = event_reader.iter().next() else {
+    let Some(event) = event_reader.iter().next() else {
         return;
     };
 
-    let new_test_case = &test_cases.cases[current_level_id.0];
+    commands.insert_resource(CurrentLevelId(event.0));
+
+    let new_test_case = &test_cases.cases[event.0];
     commands.insert_resource(new_test_case.clone());
 
     event_start_level.send(StartLevelEventWithLevel(new_test_case.level.to_owned()));
 }
 
-fn init_automation(mut commands: Commands, mut event_writer: EventWriter<StartTestCaseEvent>) {
-    let test_cases = intialize_test_cases();
-    commands.insert_resource(test_cases);
+fn init_automation(mut commands: Commands) {
+    let test_cases = test_cases! {
+        test_case!(REACH_GOAL_FALLING, RIGHT, RIGHT, RIGHT,),
+        test_case!(FALL_ON_SPIKE, RIGHT, RIGHT,),
+    };
 
-    event_writer.send(StartTestCaseEvent);
-    commands.insert_resource(CurrentLevelId(0));
+    commands.insert_resource(test_cases);
 }
