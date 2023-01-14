@@ -1,4 +1,7 @@
 Basic game:
+    Movement bugs:
+    * fall on snake.
+
     Eat and grow:
     * Level unlock Condition
 

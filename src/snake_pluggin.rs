@@ -89,12 +89,12 @@ struct SnakePartSpriteBundle {
 }
 
 impl SnakePartSpriteBundle {
-    fn new(scale: Vec2, color: Color) -> Self {
+    fn new(scale: Vec2, size: Vec2, color: Color) -> Self {
         SnakePartSpriteBundle {
             sprite_bundle: SpriteBundle {
                 sprite: Sprite {
                     color,
-                    custom_size: Some(SNAKE_SIZE),
+                    custom_size: Some(size),
                     ..default()
                 },
                 transform: Transform {
@@ -222,6 +222,11 @@ pub fn spawn_snake(
             .with_children(|parent| {
                 parent.spawn(SnakePartSpriteBundle::new(
                     Vec2::ONE,
+                    if index == 0 {
+                        SNAKE_SIZE * 1.1
+                    } else {
+                        SNAKE_SIZE
+                    },
                     SNAKE_COLORS[snake_index as usize],
                 ));
             });
@@ -248,6 +253,11 @@ pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: En
             .with_children(|parent| {
                 parent.spawn(SnakePartSpriteBundle::new(
                     Vec2::ONE,
+                    if index == 0 {
+                        SNAKE_SIZE * 1.1
+                    } else {
+                        SNAKE_SIZE
+                    },
                     SNAKE_COLORS[snake.index() as usize],
                 ));
             });
@@ -387,6 +397,7 @@ pub fn grow_snake_on_move_system(
                 parent
                     .spawn(SnakePartSpriteBundle::new(
                         Vec2::ZERO,
+                        SNAKE_SIZE,
                         SNAKE_COLORS[snake.index as usize],
                     ))
                     .insert(Animator::new(grow_tween));

@@ -180,18 +180,17 @@ impl LevelTemplate {
     }
 }
 
-const LEVEL: &str = "
-..A.....
-#.aBbb..
-#.aa..X.
-#..#...";
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     pub fn test_snake_extraction_complex() {
+        const LEVEL: &str = "..A.....\n\
+        #.aBbb..\n\
+        #.aa..X.\n\
+        #..#...";
+
         let level = LevelTemplate::parse(LEVEL);
         assert!(level.is_ok());
         let level = level.unwrap();

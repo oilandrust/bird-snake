@@ -81,6 +81,27 @@ impl<'a> SnakeCommands<'a> {
             })
         }
     }
+
+    pub fn stop_falling_on_spikes(&mut self, snake: &'a Snake) {
+        // Stop fall can happen a long time after beggin fall, and other actions can be done in between.
+        // We find the corresponding beggin fall and add the undo info to it so that both can be undone at the same time.
+        let begin_fall = self
+            .history
+            .move_history
+            .iter_mut()
+            .rev()
+            .find(|event| {
+                event.snake_index == snake.index()
+                    && matches!(event.event, MoveHistoryEvent::BeginFall(_))
+            })
+            .unwrap();
+
+        if let MoveHistoryEvent::BeginFall(begin) = &mut begin_fall.event {
+            begin.end = Some(EndFall {
+                walkable_updates: vec![],
+            })
+        }
+    }
 }
 
 pub struct PlayerMoveCommand<'a> {

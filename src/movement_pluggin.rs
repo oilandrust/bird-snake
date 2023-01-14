@@ -32,16 +32,24 @@ pub struct GravityFall {
 
 pub struct MovementPluggin;
 
+pub struct MoveCommandEvent(IVec2);
+
 pub struct SnakeMovedEvent;
 
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<SnakeMovedEvent>()
+            .add_event::<MoveCommandEvent>()
             .add_event::<crate::undo::UndoEvent>()
             .add_system(keyboard_undo_system)
+            .add_system(keyboard_move_command_system)
             .add_system(undo_event_system.after(keyboard_undo_system))
-            .add_system(snake_movement_control_system.after(undo_event_system))
+            .add_system(
+                snake_movement_control_system
+                    .after(undo_event_system)
+                    .after(keyboard_move_command_system),
+            )
             .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
             .add_system(gravity_system.after(grow_snake_on_move_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
@@ -59,29 +67,10 @@ fn min_distance_to_ground(level: &LevelInstance, snake: &Snake) -> i32 {
         .unwrap()
 }
 
-type WithMovementControlSystemFilter = (
-    With<SelectedSnake>,
-    With<Active>,
-    Without<MoveCommand>,
-    Without<GravityFall>,
-);
-
-#[allow(clippy::too_many_arguments)]
-pub fn snake_movement_control_system(
+pub fn keyboard_move_command_system(
     keyboard: Res<Input<KeyCode>>,
-    mut level_instance: ResMut<LevelInstance>,
-    constants: Res<GameConstants>,
-    mut snake_history: ResMut<SnakeHistory>,
-    mut commands: Commands,
-    mut snake_moved_event: EventWriter<SnakeMovedEvent>,
-    mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
-    mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
-    foods_query: Query<&Food>,
+    mut move_command_event: EventWriter<MoveCommandEvent>,
 ) {
-    let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
-        return;
-    };
-
     let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
         Some(IVec2::Y)
     } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
@@ -98,10 +87,40 @@ pub fn snake_movement_control_system(
         return;
     };
 
-    let new_position = snake.head_position() + direction;
+    move_command_event.send(MoveCommandEvent(direction));
+}
+
+type WithMovementControlSystemFilter = (
+    With<SelectedSnake>,
+    With<Active>,
+    Without<MoveCommand>,
+    Without<GravityFall>,
+);
+
+#[allow(clippy::too_many_arguments)]
+pub fn snake_movement_control_system(
+    mut level_instance: ResMut<LevelInstance>,
+    constants: Res<GameConstants>,
+    mut snake_history: ResMut<SnakeHistory>,
+    mut move_command_event: EventReader<MoveCommandEvent>,
+    mut commands: Commands,
+    mut snake_moved_event: EventWriter<SnakeMovedEvent>,
+    mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
+    mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
+    foods_query: Query<&Food>,
+) {
+    let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
+        return;
+    };
+
+    let Some(MoveCommandEvent(direction)) = move_command_event.iter().next() else {
+        return;
+    };
+
+    let new_position = snake.head_position() + *direction;
 
     // Check that we have enough parts to go up.
-    if direction == IVec2::Y && snake.is_standing() && !level_instance.is_food(new_position) {
+    if *direction == IVec2::Y && snake.is_standing() && !level_instance.is_food(new_position) {
         commands.entity(snake_entity).insert(GravityFall {
             velocity: constants.jump_velocity,
             relative_y: 0.0,
@@ -126,7 +145,7 @@ pub fn snake_movement_control_system(
         .unzip();
 
     if let Some(other_snake) = &mut other_snake {
-        if !level_instance.can_push_snake(other_snake.as_ref(), direction) {
+        if !level_instance.can_push_snake(other_snake.as_ref(), *direction) {
             return;
         }
     };
@@ -140,7 +159,7 @@ pub fn snake_movement_control_system(
     let mut snake_commands = SnakeCommands::new(&mut level_instance, &mut snake_history);
 
     snake_commands
-        .player_move(snake.as_mut(), direction)
+        .player_move(snake.as_mut(), *direction)
         .pushing_snake(other_snake)
         .eating_food(food)
         .execute();
@@ -156,7 +175,7 @@ pub fn snake_movement_control_system(
 
     if let Some(other_snake_entity) = other_snake_entity {
         commands.entity(other_snake_entity).insert(MoveCommand {
-            direction: Some(direction),
+            direction: Some(*direction),
             velocity: constants.move_velocity,
             anim_offset: GRID_TO_WORLD_UNIT,
         });
@@ -183,6 +202,21 @@ pub fn gravity_system(
                     continue;
                 }
 
+                // Check if we fell on spikes, if, so trigger undo.
+                for (position, _) in snake.parts() {
+                    if !level.is_spike(*position) {
+                        continue;
+                    }
+
+                    let mut snake_commands = SnakeCommands::new(&mut level, &mut snake_history);
+                    snake_commands.stop_falling_on_spikes(snake.as_ref());
+
+                    commands.entity(snake_entity).remove::<GravityFall>();
+
+                    trigger_undo_event.send(UndoEvent);
+                    return;
+                }
+
                 // keep falling..
                 if min_distance_to_ground(&level, &snake) > 1 {
                     gravity_fall.relative_y = GRID_TO_WORLD_UNIT;
@@ -195,16 +229,6 @@ pub fn gravity_system(
 
                     // Nothing to do if we fell less than an unit, meaning we stayed at the same place.
                     if gravity_fall.grid_distance == 0 {
-                        return;
-                    }
-
-                    // Check if we fell on spikes, if, so trigger undo.
-                    for (position, _) in snake.parts() {
-                        if !level.is_spike(*position) {
-                            continue;
-                        }
-
-                        trigger_undo_event.send(UndoEvent);
                         return;
                     }
 

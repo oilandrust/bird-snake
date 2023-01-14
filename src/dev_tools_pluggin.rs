@@ -17,6 +17,7 @@ pub struct DevToolsPlugin;
 #[derive(Default, Resource)]
 pub struct DevToolsSettings {
     pub dev_tools_enabled: bool,
+    pub inspector_enabled: bool,
 }
 
 impl Plugin for DevToolsPlugin {
@@ -43,6 +44,11 @@ fn toogle_dev_tools_system(
         let old_value = dev_tool_settings.dev_tools_enabled;
         dev_tool_settings.dev_tools_enabled = !old_value;
     }
+
+    if keyboard.just_pressed(KeyCode::I) {
+        let old_value = dev_tool_settings.inspector_enabled;
+        dev_tool_settings.inspector_enabled = !old_value;
+    }
 }
 
 fn inspector_ui_system(world: &mut World) {
@@ -51,6 +57,10 @@ fn inspector_ui_system(world: &mut World) {
         .expect("A dev tools settings resource should be present.");
 
     if !dev_tool_settings.dev_tools_enabled {
+        return;
+    }
+
+    if !dev_tool_settings.inspector_enabled {
         return;
     }
 
