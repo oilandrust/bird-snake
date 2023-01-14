@@ -5,7 +5,8 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 
 use crate::game_constants_pluggin::GameConstants;
-use crate::level_pluggin::LevelInstance;
+use crate::level_instance::LevelEntityType;
+use crate::level_instance::LevelInstance;
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level_template::LevelTemplate,
@@ -159,10 +160,10 @@ fn debug_draw_level_cells(
         let world_grid = Vec3::new(world_grid.x, world_grid.y, 0.0);
 
         let color = match value {
-            crate::level_pluggin::Walkable::Food => Color::RED,
-            crate::level_pluggin::Walkable::Wall => Color::BLACK,
-            crate::level_pluggin::Walkable::Snake(_) => Color::BLUE,
-            crate::level_pluggin::Walkable::Spike => Color::DARK_GRAY,
+            LevelEntityType::Food => Color::RED,
+            LevelEntityType::Wall => Color::BLACK,
+            LevelEntityType::Snake(_) => Color::BLUE,
+            LevelEntityType::Spike => Color::DARK_GRAY,
         };
 
         lines.line_colored(

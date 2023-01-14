@@ -5,7 +5,8 @@ use std::collections::VecDeque;
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
-    level_pluggin::{Food, LevelEntity, LevelInstance, Walkable},
+    level_instance::{LevelEntityType, LevelInstance},
+    level_pluggin::{Food, LevelEntity},
     level_template::{LevelTemplate, SnakeTemplate},
     movement_pluggin::{update_sprite_positions_system, GravityFall, SnakeMovedEvent},
     undo::{SnakeHistory, UndoEvent},
@@ -236,7 +237,7 @@ pub fn spawn_snake(
     spawn_command.insert(LevelEntity).insert(Active);
 
     for (position, _) in snake_template {
-        level_instance.mark_position_occupied(*position, Walkable::Snake(snake_index));
+        level_instance.mark_position_occupied(*position, LevelEntityType::Snake(snake_index));
     }
 
     spawn_command.id()

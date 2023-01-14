@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::*,
-    level_pluggin::{Food, LevelInstance},
+    level_instance::LevelInstance,
+    level_pluggin::Food,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SnakePart, SpawnSnakeEvent,

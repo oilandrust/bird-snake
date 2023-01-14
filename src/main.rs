@@ -11,6 +11,7 @@ mod automated_test_pluggin;
 mod commands;
 mod dev_tools_pluggin;
 mod game_constants_pluggin;
+mod level_instance;
 mod level_pluggin;
 mod level_template;
 mod levels;

@@ -1,15 +1,16 @@
 use bevy::prelude::*;
 
 use crate::{
-    level_pluggin::{spawn_food, LevelInstance, Walkable},
+    level_instance::{LevelEntityType, LevelInstance},
+    level_pluggin::spawn_food,
     level_template::SnakeTemplate,
     movement_pluggin::GravityFall,
     snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum WalkableUpdateEvent {
-    ClearPosition(IVec2, Walkable),
+pub enum LevelEntityUpdateEvent {
+    ClearPosition(IVec2, LevelEntityType),
     FillPosition(IVec2),
 }
 
@@ -25,7 +26,7 @@ pub struct BeginFall {
 /// History event marking that a snake stops falling, with distance fallen.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct EndFall {
-    pub walkable_updates: Vec<WalkableUpdateEvent>,
+    pub walkable_updates: Vec<LevelEntityUpdateEvent>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -56,7 +57,7 @@ pub enum MoveHistoryEvent {
 pub struct SnakeHistoryEvent {
     pub event: MoveHistoryEvent,
     pub snake_index: i32,
-    walkable_updates: Vec<WalkableUpdateEvent>,
+    walkable_updates: Vec<LevelEntityUpdateEvent>,
 }
 
 pub struct UndoEvent;
@@ -80,7 +81,7 @@ impl SnakeHistory {
         &mut self,
         event: MoveHistoryEvent,
         snake_index: i32,
-        walkable_updates: Vec<WalkableUpdateEvent>,
+        walkable_updates: Vec<LevelEntityUpdateEvent>,
     ) {
         self.move_history.push(SnakeHistoryEvent {
             event,
