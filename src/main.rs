@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
-use level_pluggin::{LevelPluggin, StartLevelEventWithIndex};
+use level_pluggin::{LevelPluggin, StartLevelEventWithIndex, StartTestLevelEventWithIndex};
 use movement_pluggin::MovementPluggin;
 use snake_pluggin::SnakePluggin;
 
@@ -89,13 +89,23 @@ fn main() {
             app.add_startup_system(start_test_case);
         }
         None => {
-            let start_level = args.level;
-            let start_game = move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
-                let start_level = start_level.unwrap_or(0);
-                event_writer.send(StartLevelEventWithIndex(start_level));
+            match args.test_level {
+                Some(test_level) => {
+                    let startup =
+                        move |mut event_writer: EventWriter<StartTestLevelEventWithIndex>| {
+                            event_writer.send(StartTestLevelEventWithIndex(test_level));
+                        };
+                    app.add_startup_system(startup);
+                }
+                None => {
+                    let start_level = args.level;
+                    let startup = move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
+                        let start_level = start_level.unwrap_or(0);
+                        event_writer.send(StartLevelEventWithIndex(start_level));
+                    };
+                    app.add_startup_system(startup);
+                }
             };
-
-            app.add_startup_system(start_game);
         }
     };
 

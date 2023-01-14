@@ -12,10 +12,12 @@ use crate::{
     levels::LEVELS,
     movement_pluggin::GravityFall,
     snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
+    test_levels::TEST_LEVELS,
     undo::{SnakeHistory, WalkableUpdateEvent},
 };
 
 pub struct StartLevelEventWithIndex(pub usize);
+pub struct StartTestLevelEventWithIndex(pub usize);
 pub struct StartLevelEventWithLevel(pub String);
 pub struct ClearLevelEvent;
 
@@ -222,6 +224,7 @@ pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
 impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<StartLevelEventWithIndex>()
+            .add_event::<StartTestLevelEventWithIndex>()
             .add_event::<StartLevelEventWithLevel>()
             .add_event::<ClearLevelEvent>()
             .add_stage_before(
@@ -230,9 +233,12 @@ impl Plugin for LevelPluggin {
                 SystemStage::single_threaded(),
             )
             .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_with_index_system)
+            .add_system_to_stage(LOAD_LEVEL_STAGE, load_test_level_with_index_system)
             .add_system_to_stage(
                 LOAD_LEVEL_STAGE,
-                load_level_system.after(load_level_with_index_system),
+                load_level_system
+                    .after(load_level_with_index_system)
+                    .after(load_test_level_with_index_system),
             )
             .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
             .add_system_to_stage(CoreStage::PostUpdate, check_for_level_completion_system)
@@ -252,6 +258,23 @@ fn load_level_with_index_system(
     let next_level_index = event.0;
     event_start_level.send(StartLevelEventWithLevel(
         LEVELS[next_level_index].to_owned(),
+    ));
+
+    commands.insert_resource(CurrentLevelId(next_level_index));
+}
+
+fn load_test_level_with_index_system(
+    mut commands: Commands,
+    mut event_start_level_with_index: EventReader<StartTestLevelEventWithIndex>,
+    mut event_start_level: EventWriter<StartLevelEventWithLevel>,
+) {
+    let Some(event) = event_start_level_with_index.iter().next() else {
+        return;
+    };
+
+    let next_level_index = event.0;
+    event_start_level.send(StartLevelEventWithLevel(
+        TEST_LEVELS[next_level_index].to_owned(),
     ));
 
     commands.insert_resource(CurrentLevelId(next_level_index));
