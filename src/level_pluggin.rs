@@ -9,7 +9,7 @@ use crate::{
     level_instance::{LevelEntityType, LevelInstance},
     level_template::{Cell, LevelTemplate},
     levels::LEVELS,
-    movement_pluggin::GravityFall,
+    movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
     test_levels::TEST_LEVELS,
     undo::SnakeHistory,
@@ -57,6 +57,10 @@ impl Plugin for LevelPluggin {
             )
             .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
             .add_system_to_stage(CoreStage::PostUpdate, check_for_level_completion_system)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                snake_exit_level_system.after(check_for_level_completion_system),
+            )
             .add_system_to_stage(CoreStage::Last, clear_level_system);
     }
 }
@@ -242,12 +246,27 @@ pub fn clear_level_system(
     commands.remove_resource::<SnakeHistory>();
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub fn check_for_level_completion_system(
+    level: Res<LevelTemplate>,
+    mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
+    snakes_query: Query<&Snake, With<Active>>,
+) {
+    let snake_at_exit = snakes_query
+        .iter()
+        .find(|snake| level.goal_position == snake.head_position());
+    if snake_at_exit.is_none() {
+        return;
+    }
+
+    snake_reach_goal_event.send(SnakeReachGoalEvent(snake_at_exit.unwrap().index()));
+}
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+pub fn snake_exit_level_system(
     mut history: ResMut<SnakeHistory>,
     mut level_instance: ResMut<LevelInstance>,
-    level: Res<LevelTemplate>,
     level_id: Res<CurrentLevelId>,
+    mut snake_reach_goal_event: EventReader<SnakeReachGoalEvent>,
     mut event_start_level: EventWriter<StartLevelEventWithIndex>,
     mut event_clear_level: EventWriter<ClearLevelEvent>,
     mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
@@ -258,13 +277,11 @@ pub fn check_for_level_completion_system(
         With<Active>,
     >,
 ) {
-    let snake_at_exit = snakes_query
-        .iter()
-        .find(|(_, snake, _, _)| level.goal_position == snake.head_position());
-    if snake_at_exit.is_none() {
+    let Some(reach_goal_event) = snake_reach_goal_event.iter().next() else {
         return;
-    }
+    };
 
+    // If there is only on snake left, exit level.
     if snakes_query.iter().len() == 1 {
         if level_id.0 == LEVELS.len() - 1 {
             exit.send(AppExit);
@@ -274,6 +291,10 @@ pub fn check_for_level_completion_system(
         }
         return;
     }
+
+    let snake_at_exit = snakes_query
+        .iter()
+        .find(|(_, snake, _, _)| snake.index() == reach_goal_event.0);
 
     let Some((entity, snake, fall, selected)) = snake_at_exit else {
         return;

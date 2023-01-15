@@ -5,6 +5,7 @@ use crate::{
     game_constants_pluggin::*,
     level_instance::LevelInstance,
     level_pluggin::Food,
+    level_template::LevelTemplate,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SnakePart, SpawnSnakeEvent,
@@ -37,11 +38,14 @@ pub struct MoveCommandEvent(pub IVec2);
 
 pub struct SnakeMovedEvent;
 
+pub struct SnakeReachGoalEvent(pub i32);
+
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
             .add_event::<SnakeMovedEvent>()
             .add_event::<MoveCommandEvent>()
+            .add_event::<SnakeReachGoalEvent>()
             .add_event::<crate::undo::UndoEvent>()
             .add_system(keyboard_undo_system)
             .add_system(keyboard_move_command_system)
@@ -73,13 +77,13 @@ pub fn keyboard_move_command_system(
     mut move_command_event: EventWriter<MoveCommandEvent>,
 ) {
     let new_direction = if keyboard.any_just_pressed(MOVE_UP_KEYS) {
-        Some(IVec2::Y)
+        Some(UP)
     } else if keyboard.any_just_pressed(MOVE_LEFT_KEYS) {
-        Some(IVec2::NEG_X)
+        Some(LEFT)
     } else if keyboard.any_just_pressed(MOVE_DOWN_KEYS) {
-        Some(IVec2::NEG_Y)
+        Some(DOWN)
     } else if keyboard.any_just_pressed(MOVE_RIGHT_KEYS) {
-        Some(IVec2::X)
+        Some(RIGHT)
     } else {
         None
     };
@@ -100,12 +104,14 @@ type WithMovementControlSystemFilter = (
 
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
+    level_template: Res<LevelTemplate>,
     mut level_instance: ResMut<LevelInstance>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut move_command_event: EventReader<MoveCommandEvent>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
+    mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
     foods_query: Query<&Food>,
@@ -132,6 +138,12 @@ pub fn snake_movement_control_system(
 
     // Check for collition with self and walls.
     if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
+        return;
+    }
+
+    // Level goal?
+    if new_position == level_template.goal_position {
+        snake_reach_goal_event.send(SnakeReachGoalEvent(snake.index()));
         return;
     }
 
