@@ -117,18 +117,28 @@ impl LevelTemplate {
         let mut grid = level_string.parse::<Grid<Cell>>()?.flip_y();
 
         // Find and extract the snakes.
-        let mut start_heads = grid
+        let mut start_heads: Vec<(usize, Cell, char)> = grid
             .cells()
+            .copied()
             .enumerate()
-            .filter(|(_, &cell)| matches!(cell, Cell::SnakeHead(_)))
-            .peekable();
+            .filter_map(|(index, cell)| {
+                if let Cell::SnakeHead(c) = cell {
+                    Some((index, cell, c))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
-        if start_heads.peek().is_none() {
+        if start_heads.is_empty() {
             bail!(ParseLevelError::MissingSnakeHead);
         }
 
+        start_heads.sort_by_key(|element| element.2);
+
         let snakes: Vec<SnakeTemplate> = start_heads
-            .map(|(start_head_index, _)| extract_snake_template(&grid, start_head_index))
+            .iter()
+            .map(|(start_head_index, _, _)| extract_snake_template(&grid, *start_head_index))
             .collect::<Result<Vec<SnakeTemplate>>>()?;
 
         // Set the cells where the snakes are as empty, they are managed as part of the game state.

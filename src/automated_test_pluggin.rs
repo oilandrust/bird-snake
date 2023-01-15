@@ -3,12 +3,12 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    game_constants_pluggin::RIGHT,
+    game_constants_pluggin::*,
     level_pluggin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevel, LOAD_LEVEL_STAGE,
     },
     movement_pluggin::MoveCommandEvent,
-    test_levels::{FALL_ON_SPIKE, REACH_GOAL_FALLING},
+    test_levels::*,
 };
 
 #[derive(Clone)]
@@ -92,7 +92,8 @@ fn start_test_case(
 
 fn init_automation(mut commands: Commands) {
     let test_cases = test_cases! {
-        test_case!(REACH_GOAL_FALLING, RIGHT, RIGHT, RIGHT,),
+        test_case!(FALL_ON_SNAKE_BUG, RIGHT,),
+        test_case!(REACH_GOAL_FALLING, RIGHT,),
         test_case!(FALL_ON_SPIKE, RIGHT, RIGHT,),
     };
 
