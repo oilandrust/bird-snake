@@ -35,5 +35,4 @@ Cargo.lock
 .history
 .ionide
 
-### Temporary until game-grid is moved to own repo:
-game-grid
+release

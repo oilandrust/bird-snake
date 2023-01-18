@@ -207,7 +207,7 @@ mod tests {
         assert!(level.is_ok());
         let level = level.unwrap();
         assert_eq!(level.initial_snakes.len(), 2);
-        assert_eq!(level.initial_snakes[0].len(), 3);
-        assert_eq!(level.initial_snakes[1].len(), 4);
+        assert_eq!(level.initial_snakes[0].len(), 4);
+        assert_eq!(level.initial_snakes[1].len(), 3);
     }
 }

@@ -1,3 +1,4 @@
+use args::Args;
 use automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use bevy::prelude::*;
 use bevy_tweening::TweeningPlugin;
@@ -7,6 +8,7 @@ use level_pluggin::{LevelPluggin, StartLevelEventWithIndex, StartTestLevelEventW
 use movement_pluggin::MovementPluggin;
 use snake_pluggin::SnakePluggin;
 
+pub mod args;
 mod automated_test_pluggin;
 mod commands;
 mod dev_tools_pluggin;
@@ -20,50 +22,15 @@ mod snake_pluggin;
 mod test_levels;
 mod undo;
 
-use clap::{Parser, Subcommand};
+// Don't touch this piece, needed for Web
+#[cfg(target_arch = "wasm32")]
+mod web_main;
 
-/// Cli API.
-/// Run a level
-/// ./snake-bird -l 0
-/// ./snake-bird --level 0
-/// Run a test level
-/// ./snake-bird -t 0
-/// ./snake-bird --test_level 0
-/// // Run the automated tests
-/// ./snake-bird test
-/// // Run the automated tests for a specific test case
-/// ./snake-bird -t 0 test
-
-#[derive(Parser, Debug)]
-struct Args {
-    #[arg(short, long)]
-    level: Option<usize>,
-
-    #[arg(short, long)]
-    test_level: Option<usize>,
-
-    #[command(subcommand)]
-    command: Option<Commands>,
-}
-
-#[derive(Subcommand, Debug)]
-enum Commands {
-    /// Run automated tests.
-    Test {
-        #[arg(short, long)]
-        test_case: Option<usize>,
-    },
-}
-
-fn main() {
-    let args = Args::parse();
-
-    let mut app = App::new();
-
+pub fn run(app: &mut App, args: &Args) {
     app.insert_resource(ClearColor(DARK_COLOR_PALETTE[4]))
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
-                title: "Snake".to_string(),
+                title: "Bird Snake".to_string(),
                 width: 640.0,
                 height: 420.0,
                 ..default()
@@ -79,7 +46,7 @@ fn main() {
         .add_system(bevy::window::close_on_esc);
 
     match args.command {
-        Some(Commands::Test { test_case }) => {
+        Some(args::Commands::Test { test_case }) => {
             app.add_plugin(AutomatedTestPluggin);
 
             let start_test_case =

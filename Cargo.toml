@@ -1,11 +1,18 @@
 [package]
-name = "snake-bird"
+name = "bird-snake"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/game.rs"
+
+[[bin]]
+name = "bird-snake-macos"
+path = "src/desktop_main.rs"
 
 [dependencies]
+wasm-bindgen = "0.2"
 anyhow = "1.0.68"
 bevy = "0.9.1"
 bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui" }
@@ -14,5 +21,20 @@ bevy_prototype_debug_lines = "0.9.0"
 bevy_tweening = "0.6.0"
 clap = { version = "4.1.1", features = ["derive"] }
 egui = "0.20.1"
-game-grid = { git = "https://github.com/oilandrust/game-grid.git", features = ["bevy-ivec2"] }
+game-grid = { path = "../game-grid", features = ["bevy-ivec2"] }
 thiserror = "1.0.38"
+
+# Wasm Dependenccies
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+# Used for resizing the canvas to fit the window
+web-sys = { version = "0.3", features = ["Window"] }
+gloo-events = "0.1"
+
+
+[profile.dev.package."*"]
+# Compile all dependencies as release for extra fast
+opt-level=3
+
+[profile.release]
+lto = "thin"
