@@ -4,7 +4,9 @@ use std::collections::VecDeque;
 
 use crate::{
     commands::SnakeCommands,
-    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
+    game_constants_pluggin::{
+        to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE, SNAKE_SIZE,
+    },
     level_instance::{LevelEntityType, LevelInstance},
     level_pluggin::{Food, LevelEntity},
     level_template::{LevelTemplate, SnakeTemplate},
@@ -51,11 +53,14 @@ pub struct SelectedSnake;
 #[derive(Component)]
 pub struct Active;
 
-#[derive(Component, PartialEq, Eq)]
+#[derive(Component, PartialEq, Eq, Reflect)]
 pub struct SnakePart {
     pub snake_index: i32,
     pub part_index: usize,
 }
+
+#[derive(Component)]
+pub struct SnakePartSprite;
 
 #[derive(Bundle)]
 struct SnakePartBundle {
@@ -87,6 +92,7 @@ impl SnakePartBundle {
 struct SnakePartSpriteBundle {
     sprite_bundle: SpriteBundle,
     level_entity: LevelEntity,
+    part_sprite: SnakePartSprite,
 }
 
 impl SnakePartSpriteBundle {
@@ -102,9 +108,11 @@ impl SnakePartSpriteBundle {
                     scale: scale.extend(1.0),
                     ..default()
                 },
+
                 ..default()
             },
             level_entity: LevelEntity,
+            part_sprite: SnakePartSprite,
         }
     }
 }
@@ -218,15 +226,32 @@ pub fn spawn_snake(
     snake_index: i32,
 ) -> Entity {
     for (index, part) in snake_template.iter().enumerate() {
-        commands
-            .spawn(SnakePartBundle::new(part.0, snake_index, index))
-            .with_children(|parent| {
-                parent.spawn(SnakePartSpriteBundle::new(
-                    Vec2::ONE,
-                    SNAKE_SIZE,
-                    SNAKE_COLORS[snake_index as usize],
+        let mut part = commands.spawn(SnakePartBundle::new(part.0, snake_index, index));
+
+        part.with_children(|parent| {
+            parent.spawn(SnakePartSpriteBundle::new(
+                Vec2::ONE,
+                SNAKE_SIZE,
+                SNAKE_COLORS[snake_index as usize],
+            ));
+        });
+
+        if index == 0 {
+            part.with_children(|parent| {
+                parent.spawn((
+                    SpriteBundle {
+                        sprite: Sprite {
+                            color: Color::BLACK,
+                            custom_size: Some(SNAKE_EYE_SIZE),
+                            ..default()
+                        },
+                        transform: Transform::from_xyz(5.0, 5.0, 1.0),
+                        ..default()
+                    },
+                    LevelEntity,
                 ));
             });
+        }
     }
 
     let mut spawn_command = commands.spawn(Snake {

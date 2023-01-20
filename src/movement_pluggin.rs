@@ -8,7 +8,7 @@ use crate::{
     level_template::LevelTemplate,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
-        SnakePart, SpawnSnakeEvent,
+        SnakePart, SnakePartSprite, SpawnSnakeEvent,
     },
     undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
 };
@@ -148,14 +148,19 @@ pub fn snake_movement_control_system(
     }
 
     // Find if there is a snake in the way.
-    let (other_snake_entity, mut other_snake) = level_instance
+    let other_snake = level_instance
         .is_snake(new_position)
         .and_then(|other_snake_id| {
             other_snakes_query
                 .iter_mut()
                 .find(|(_, snake)| snake.index() == other_snake_id)
-        })
-        .unzip();
+        });
+
+    // unzip
+    let (other_snake_entity, mut other_snake) = match other_snake {
+        Some((a, b)) => (Some(a), Some(b)),
+        None => (None, None),
+    };
 
     if let Some(other_snake) = &mut other_snake {
         if !level_instance.can_push_snake(other_snake.as_ref(), *direction) {
@@ -202,9 +207,26 @@ pub fn gravity_system(
     mut snake_history: ResMut<SnakeHistory>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
     mut commands: Commands,
-    mut query: Query<(Entity, &mut Snake, Option<&mut GravityFall>), With<Active>>,
+    mut query: Query<
+        (
+            Entity,
+            &mut Snake,
+            Option<&mut GravityFall>,
+            Option<&SelectedSnake>,
+        ),
+        With<Active>,
+    >,
 ) {
-    for (snake_entity, mut snake, gravity_fall) in query.iter_mut() {
+    let mut sorted_snakes: Vec<(
+        Entity,
+        Mut<Snake>,
+        Option<Mut<GravityFall>>,
+        Option<&SelectedSnake>,
+    )> = query.iter_mut().collect();
+
+    sorted_snakes.sort_by_key(|(_, _, _, selected_snake)| selected_snake.is_none());
+
+    for (snake_entity, mut snake, gravity_fall, _) in sorted_snakes.into_iter() {
         match gravity_fall {
             Some(mut gravity_fall) => {
                 gravity_fall.velocity -= constants.gravity * time.delta_seconds();
@@ -285,10 +307,11 @@ fn snake_smooth_movement_system(
 #[allow(clippy::type_complexity)]
 pub fn update_sprite_positions_system(
     snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), With<Active>>,
-    mut sprite_query: Query<(&mut Transform, &SnakePart)>,
+    mut parts_query: Query<(&mut Transform, &SnakePart, &Children), Without<SnakePartSprite>>,
+    mut parts_sprite_query: Query<&mut Transform, With<SnakePartSprite>>,
 ) {
     for (snake, move_command, gravity_fall) in snake_query.iter() {
-        for (mut transform, part) in sprite_query.iter_mut() {
+        for (mut transform, part, children) in parts_query.iter_mut() {
             if part.snake_index != snake.index() {
                 continue;
             }
@@ -300,9 +323,18 @@ pub fn update_sprite_positions_system(
 
             let mut part_position = to_world(snake.parts()[part.part_index].0);
 
+            let direction = snake.parts()[part.part_index].1;
+            let direction_3 = direction.extend(0).as_vec3();
+            let ortho_dir = Vec3::Z.cross(direction_3);
+
+            transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Z));
+
+            let sprite_entity = children.get(0).unwrap();
+            let mut sprite_transform = parts_sprite_query.get_mut(*sprite_entity).unwrap();
+
             // Move sprite with move anim.
             if let Some(move_command) = move_command {
-                let direction = move_command
+                let direction: IVec2 = move_command
                     .direction
                     .unwrap_or(snake.parts()[part.part_index].1);
 
@@ -315,14 +347,14 @@ pub fn update_sprite_positions_system(
                 {
                     let size_offset =
                         direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-                    transform.scale =
-                        (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
+                    sprite_transform.scale = transform.rotation
+                        * (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
                     part_position -= size_offset * 0.5;
                 } else {
-                    transform.scale = Vec3::ONE;
+                    sprite_transform.scale = Vec3::ONE;
                 }
             } else {
-                transform.scale = Vec3::ONE;
+                sprite_transform.scale = Vec3::ONE;
             }
 
             // Move sprite with gravity fall anim.

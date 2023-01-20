@@ -1,6 +1,13 @@
 Basic game:
-    Movement bugs:
-    * fall on snake.
+    Test all levels
+
+    Graphics:
+    * Snake eye and mouth
+    * Snake parts delimiter
+    * Goal sprite inactive
+    * Goal sprite Active
+    * Food sprite
+    * Spike sprite
 
     Eat and grow:
     * Level unlock Condition
@@ -11,9 +18,11 @@ Basic game:
     End of level:
     * animation
 
-    20 levels
+    Menu:
+    * Main Menu
+    * Selet level
 
-Menu:
+    Ship
 
 Graphics:
 Whole new project!

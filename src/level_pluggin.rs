@@ -182,7 +182,7 @@ fn spawn_level_entities_system(
             transform: Transform::from_xyz(
                 level_template.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
                 level_template.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                0.0,
+                50.0,
             ),
             ..default()
         })
