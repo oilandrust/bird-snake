@@ -16,8 +16,8 @@ pub const FALL_ON_SNAKE_BUG: &str = "...X.
 ..#...";
 
 pub const DEBUG_DRAW: &str = "...X.
-......
-aA..
-#############";
+...A
+aaaa...
+###################";
 
 pub const TEST_LEVELS: [&str; 3] = [DEBUG_DRAW, FALL_ON_SPIKE, FALL_ON_SNAKE_BUG];

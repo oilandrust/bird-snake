@@ -276,7 +276,7 @@ pub fn spawn_snake(
         GeometryBuilder::build_as(
             &shape,
             DrawMode::Outlined {
-                fill_mode: FillMode::color(Color::NONE), //SNAKE_COLORS[snake_index as usize]
+                fill_mode: FillMode::color(SNAKE_COLORS[snake_index as usize]),
                 outline_mode: StrokeMode::new(Color::BLACK, 1.0),
             },
             Transform::default(),
@@ -326,17 +326,18 @@ pub fn update_snake_mesh_system(mut query: Query<&mut Path>, snake_query: Query<
         &direction,
         &ortho_dir,
     );
-    let first_vertex = corner_world_position;
 
-    let forward_iter = snake.parts.iter().zip(snake.parts.iter().skip(1));
+    let forward_iter = snake.parts.iter().copied().zip(snake.parts.iter().skip(1));
     let backwards_iter = snake
         .parts
         .iter()
+        .copied()
         .rev()
+        .map(|(position, direction)| (position, -direction))
         .zip(snake.parts.iter().rev().skip(1));
 
-    for (part, next_part) in forward_iter {
-        let (position, direction) = *part;
+    for (part, next_part) in forward_iter.chain(backwards_iter) {
+        let (position, direction) = part;
         let ortho_dir = IVec2::new(-direction.y, direction.x);
 
         let corner_grid_pos =
@@ -346,43 +347,17 @@ pub fn update_snake_mesh_system(mut query: Query<&mut Path>, snake_query: Query<
             (2.0 * corner_grid_pos.dot(direction.as_vec2())) as i32,
             (2.0 * corner_grid_pos.dot(ortho_dir.as_vec2())) as i32,
         );
+        assert!(current_corner.abs() == IVec2::new(1, 1));
 
         let to_next = next_part.0 - position;
         let to_next_relative = IVec2::new(to_next.dot(direction), to_next.dot(ortho_dir));
-        let is_next_part = |corner: IVec2| corner.dot(to_next_relative) == 1 && corner.y < 0;
+        let is_next_part = |corner: IVec2| {
+            corner.dot(to_next_relative) == 1 && next_corner(&corner).dot(to_next_relative) == 1
+        };
 
         loop {
             path_builder.line_to(corner_world_position);
             if is_next_part(current_corner) {
-                break;
-            }
-
-            current_corner = next_corner(&current_corner);
-            corner_world_position =
-                corner_position(&current_corner, &position, &direction, &ortho_dir);
-        }
-    }
-
-    for (part, next_part) in backwards_iter {
-        let (position, direction) = *part;
-        let direction = -direction;
-        let ortho_dir = IVec2::new(-direction.y, direction.x);
-
-        let corner_grid_pos =
-            (corner_world_position - to_world(position)) * GRID_TO_WORLD_UNIT_INVERSE;
-
-        current_corner = IVec2::new(
-            (2.0 * corner_grid_pos.dot(direction.as_vec2())) as i32,
-            (2.0 * corner_grid_pos.dot(ortho_dir.as_vec2())) as i32,
-        );
-
-        let to_next = next_part.0 - position;
-        let to_next_relative = IVec2::new(to_next.dot(direction), to_next.dot(ortho_dir));
-        let is_next_part = |corner: IVec2| corner.dot(to_next_relative) == 1 && corner.y < 0;
-
-        loop {
-            path_builder.line_to(corner_world_position);
-            if is_next_part(current_corner) || first_vertex == corner_world_position {
                 break;
             }
 
