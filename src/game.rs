@@ -1,6 +1,7 @@
 use args::Args;
 use automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use bevy::prelude::*;
+use bevy_prototype_lyon::prelude::*;
 use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
@@ -28,6 +29,7 @@ mod web_main;
 
 pub fn run(app: &mut App, args: &Args) {
     app.insert_resource(ClearColor(DARK_COLOR_PALETTE[4]))
+        .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "Bird Snake".to_string(),
@@ -37,6 +39,7 @@ pub fn run(app: &mut App, args: &Args) {
             },
             ..default()
         }))
+        .add_plugin(ShapePlugin)
         .add_plugin(TweeningPlugin)
         .add_plugin(GameConstantsPlugin)
         .add_plugin(DevToolsPlugin)

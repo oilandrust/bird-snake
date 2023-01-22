@@ -1,11 +1,16 @@
 use bevy::prelude::*;
+use bevy_prototype_lyon::{
+    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder, ShapePath, StrokeMode},
+    shapes,
+};
 use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use std::collections::VecDeque;
 
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{
-        to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE, SNAKE_SIZE,
+        to_grid, to_world, GRID_TO_WORLD_UNIT, GRID_TO_WORLD_UNIT_INVERSE, SNAKE_COLORS,
+        SNAKE_EYE_SIZE, SNAKE_SIZE,
     },
     level_instance::{LevelEntityType, LevelInstance},
     level_pluggin::{Food, LevelEntity},
@@ -23,10 +28,7 @@ impl Plugin for SnakePluggin {
             .add_event::<DespawnSnakePartsEvent>()
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system(select_snake_mouse_system)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                despawn_snake_part_system.after(update_sprite_positions_system),
-            )
+            .add_system_to_stage(CoreStage::PostUpdate, update_snake_mesh_system)
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 despawn_snake_system.after(update_sprite_positions_system),
@@ -171,6 +173,10 @@ impl Snake {
         self.parts.front().unwrap().0
     }
 
+    pub fn head_direction(&self) -> IVec2 {
+        self.parts.front().unwrap().1
+    }
+
     pub fn grow(&mut self) {
         let (tail_position, tail_direction) = self.tail();
         let new_part_position = tail_position - tail_direction;
@@ -225,47 +231,168 @@ pub fn spawn_snake(
     snake_template: &SnakeTemplate,
     snake_index: i32,
 ) -> Entity {
-    for (index, part) in snake_template.iter().enumerate() {
-        let mut part = commands.spawn(SnakePartBundle::new(part.0, snake_index, index));
+    // for (index, part) in snake_template.iter().enumerate() {
+    //     let mut part = commands.spawn(SnakePartBundle::new(part.0, snake_index, index));
 
-        part.with_children(|parent| {
-            parent.spawn(SnakePartSpriteBundle::new(
-                Vec2::ONE,
-                SNAKE_SIZE,
-                SNAKE_COLORS[snake_index as usize],
-            ));
-        });
+    //     part.with_children(|parent| {
+    //         parent.spawn(SnakePartSpriteBundle::new(
+    //             Vec2::ONE,
+    //             SNAKE_SIZE,
+    //             SNAKE_COLORS[snake_index as usize],
+    //         ));
+    //     });
 
-        if index == 0 {
-            part.with_children(|parent| {
-                parent.spawn((
-                    SpriteBundle {
-                        sprite: Sprite {
-                            color: Color::BLACK,
-                            custom_size: Some(SNAKE_EYE_SIZE),
-                            ..default()
-                        },
-                        transform: Transform::from_xyz(5.0, 5.0, 1.0),
-                        ..default()
-                    },
-                    LevelEntity,
-                ));
-            });
-        }
-    }
+    //     if index == 0 {
+    //         part.with_children(|parent| {
+    //             parent.spawn((
+    //                 SpriteBundle {
+    //                     sprite: Sprite {
+    //                         color: Color::BLACK,
+    //                         custom_size: Some(SNAKE_EYE_SIZE),
+    //                         ..default()
+    //                     },
+    //                     transform: Transform::from_xyz(5.0, 5.0, 1.0),
+    //                     ..default()
+    //                 },
+    //                 LevelEntity,
+    //             ));
+    //         });
+    //     }
+    // }
 
-    let mut spawn_command = commands.spawn(Snake {
-        parts: VecDeque::from(snake_template.clone()),
-        index: snake_index,
-    });
+    let shape = shapes::RegularPolygon {
+        sides: 4,
+        feature: shapes::RegularPolygonFeature::Radius(SNAKE_SIZE.x),
+        ..shapes::RegularPolygon::default()
+    };
 
-    spawn_command.insert(LevelEntity).insert(Active);
+    let spawn_command = commands.spawn((
+        Snake {
+            parts: VecDeque::from(snake_template.clone()),
+            index: snake_index,
+        },
+        LevelEntity,
+        Active,
+        GeometryBuilder::build_as(
+            &shape,
+            DrawMode::Outlined {
+                fill_mode: FillMode::color(Color::NONE), //SNAKE_COLORS[snake_index as usize]
+                outline_mode: StrokeMode::new(Color::BLACK, 1.0),
+            },
+            Transform::default(),
+        ),
+    ));
 
     for (position, _) in snake_template {
         level_instance.mark_position_occupied(*position, LevelEntityType::Snake(snake_index));
     }
 
     spawn_command.id()
+}
+
+const FOWARD_LEFT: IVec2 = IVec2::new(1, 1);
+const FOWARD_RIGHT: IVec2 = IVec2::new(1, -1);
+const BACK_RIGHT: IVec2 = IVec2::new(-1, -1);
+const BACK_LEFT: IVec2 = IVec2::new(-1, 1);
+
+fn next_corner(corner: &IVec2) -> IVec2 {
+    match *corner {
+        FOWARD_LEFT => FOWARD_RIGHT,
+        FOWARD_RIGHT => BACK_RIGHT,
+        BACK_RIGHT => BACK_LEFT,
+        BACK_LEFT => FOWARD_LEFT,
+        _ => panic!("should not happen"),
+    }
+}
+
+fn corner_position(corner: &IVec2, position: &IVec2, direction: &IVec2, ortho_dir: &IVec2) -> Vec2 {
+    to_world(*position)
+        + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
+        + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2()
+}
+
+pub fn update_snake_mesh_system(mut query: Query<&mut Path>, snake_query: Query<&Snake>) {
+    let snake = snake_query.single();
+
+    let mut path = query.single_mut();
+    let mut path_builder = PathBuilder::new();
+
+    let mut current_corner = BACK_LEFT;
+    let direction = snake.head_direction();
+    let ortho_dir = IVec2::new(-direction.y, direction.x);
+    let mut corner_world_position = corner_position(
+        &current_corner,
+        &snake.head_position(),
+        &direction,
+        &ortho_dir,
+    );
+    let first_vertex = corner_world_position;
+
+    let forward_iter = snake.parts.iter().zip(snake.parts.iter().skip(1));
+    let backwards_iter = snake
+        .parts
+        .iter()
+        .rev()
+        .zip(snake.parts.iter().rev().skip(1));
+
+    for (part, next_part) in forward_iter {
+        let (position, direction) = *part;
+        let ortho_dir = IVec2::new(-direction.y, direction.x);
+
+        let corner_grid_pos =
+            (corner_world_position - to_world(position)) * GRID_TO_WORLD_UNIT_INVERSE;
+
+        current_corner = IVec2::new(
+            (2.0 * corner_grid_pos.dot(direction.as_vec2())) as i32,
+            (2.0 * corner_grid_pos.dot(ortho_dir.as_vec2())) as i32,
+        );
+
+        let to_next = next_part.0 - position;
+        let to_next_relative = IVec2::new(to_next.dot(direction), to_next.dot(ortho_dir));
+        let is_next_part = |corner: IVec2| corner.dot(to_next_relative) == 1 && corner.y < 0;
+
+        loop {
+            path_builder.line_to(corner_world_position);
+            if is_next_part(current_corner) {
+                break;
+            }
+
+            current_corner = next_corner(&current_corner);
+            corner_world_position =
+                corner_position(&current_corner, &position, &direction, &ortho_dir);
+        }
+    }
+
+    for (part, next_part) in backwards_iter {
+        let (position, direction) = *part;
+        let direction = -direction;
+        let ortho_dir = IVec2::new(-direction.y, direction.x);
+
+        let corner_grid_pos =
+            (corner_world_position - to_world(position)) * GRID_TO_WORLD_UNIT_INVERSE;
+
+        current_corner = IVec2::new(
+            (2.0 * corner_grid_pos.dot(direction.as_vec2())) as i32,
+            (2.0 * corner_grid_pos.dot(ortho_dir.as_vec2())) as i32,
+        );
+
+        let to_next = next_part.0 - position;
+        let to_next_relative = IVec2::new(to_next.dot(direction), to_next.dot(ortho_dir));
+        let is_next_part = |corner: IVec2| corner.dot(to_next_relative) == 1 && corner.y < 0;
+
+        loop {
+            path_builder.line_to(corner_world_position);
+            if is_next_part(current_corner) || first_vertex == corner_world_position {
+                break;
+            }
+
+            current_corner = next_corner(&current_corner);
+            corner_world_position =
+                corner_position(&current_corner, &position, &direction, &ortho_dir);
+        }
+    }
+
+    *path = path_builder.build();
 }
 
 pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: Entity) {
@@ -391,35 +518,6 @@ pub fn grow_snake_on_move_system(
         }
 
         commands.entity(food_entity).despawn();
-
-        let tail_direction = snake.tail_direction();
-        let new_part_position = snake.tail_position();
-
-        let grow_tween = Tween::new(
-            EaseFunction::QuadraticInOut,
-            std::time::Duration::from_secs_f32(0.2),
-            GrowPartLens {
-                scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
-                scale_end: Vec2::ONE,
-                grow_direction: -tail_direction.as_vec2(),
-            },
-        );
-
-        commands
-            .spawn(SnakePartBundle::new(
-                new_part_position,
-                snake.index,
-                snake.len() - 1,
-            ))
-            .with_children(|parent| {
-                parent
-                    .spawn(SnakePartSpriteBundle::new(
-                        Vec2::ZERO,
-                        SNAKE_SIZE,
-                        SNAKE_COLORS[snake.index as usize],
-                    ))
-                    .insert(Animator::new(grow_tween));
-            });
     }
 }
 
@@ -464,22 +562,6 @@ fn despawn_snake_parts_system(
         // Despawn parts
         for (entity, part) in parts_query.iter() {
             if part.snake_index != message.0 {
-                continue;
-            }
-
-            commands.entity(entity).despawn_recursive();
-        }
-    }
-}
-
-fn despawn_snake_part_system(
-    mut despawn_snake_part_event: EventReader<DespawnSnakePartEvent>,
-    mut commands: Commands,
-    parts_query: Query<(Entity, &SnakePart)>,
-) {
-    for message in despawn_snake_part_event.iter() {
-        for (entity, part) in parts_query.iter() {
-            if *part != message.0 {
                 continue;
             }
 
