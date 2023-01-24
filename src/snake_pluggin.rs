@@ -1,21 +1,18 @@
-use bevy::prelude::*;
+use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_prototype_lyon::{
-    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder, ShapePath, StrokeMode},
+    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder, StrokeMode},
     shapes,
 };
-use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
-use std::collections::VecDeque;
+use bevy_tweening::Lens;
+use std::{collections::VecDeque, iter::once, mem};
 
 use crate::{
     commands::SnakeCommands,
-    game_constants_pluggin::{
-        to_grid, to_world, GRID_TO_WORLD_UNIT, GRID_TO_WORLD_UNIT_INVERSE, SNAKE_COLORS,
-        SNAKE_EYE_SIZE, SNAKE_SIZE,
-    },
+    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
     level_instance::{LevelEntityType, LevelInstance},
     level_pluggin::{Food, LevelEntity},
     level_template::{LevelTemplate, SnakeTemplate},
-    movement_pluggin::{update_sprite_positions_system, GravityFall, SnakeMovedEvent},
+    movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
     undo::{SnakeHistory, UndoEvent},
 };
 
@@ -29,14 +26,8 @@ impl Plugin for SnakePluggin {
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system(select_snake_mouse_system)
             .add_system_to_stage(CoreStage::PostUpdate, update_snake_mesh_system)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                despawn_snake_system.after(update_sprite_positions_system),
-            )
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                despawn_snake_parts_system.after(update_sprite_positions_system),
-            );
+            .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_system)
+            .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_parts_system);
     }
 }
 
@@ -173,10 +164,6 @@ impl Snake {
         self.parts.front().unwrap().0
     }
 
-    pub fn head_direction(&self) -> IVec2 {
-        self.parts.front().unwrap().1
-    }
-
     pub fn grow(&mut self) {
         let (tail_position, tail_direction) = self.tail();
         let new_part_position = tail_position - tail_direction;
@@ -193,10 +180,6 @@ impl Snake {
 
     pub fn tail_position(&self) -> IVec2 {
         self.parts.back().unwrap().0
-    }
-
-    pub fn tail_direction(&self) -> IVec2 {
-        self.parts.back().unwrap().1
     }
 
     pub fn is_standing(&self) -> bool {
@@ -295,79 +278,147 @@ const FOWARD_RIGHT: IVec2 = IVec2::new(1, -1);
 const BACK_RIGHT: IVec2 = IVec2::new(-1, -1);
 const BACK_LEFT: IVec2 = IVec2::new(-1, 1);
 
-fn next_corner(corner: &IVec2) -> IVec2 {
-    match *corner {
-        FOWARD_LEFT => FOWARD_RIGHT,
-        FOWARD_RIGHT => BACK_RIGHT,
-        BACK_RIGHT => BACK_LEFT,
-        BACK_LEFT => FOWARD_LEFT,
-        _ => panic!("should not happen"),
-    }
-}
-
 fn corner_position(corner: &IVec2, position: &IVec2, direction: &IVec2, ortho_dir: &IVec2) -> Vec2 {
     to_world(*position)
         + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
         + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2()
 }
 
-pub fn update_snake_mesh_system(mut query: Query<&mut Path>, snake_query: Query<&Snake>) {
-    let snake = snake_query.single();
+pub fn update_snake_mesh_system(
+    mut query: Query<&mut Path>,
+    snake_query: Query<
+        (
+            Entity,
+            &Snake,
+            Option<&MoveCommand>,
+            Option<&PushedAnim>,
+            Option<&GravityFall>,
+        ),
+        With<Active>,
+    >,
+) {
+    for (entity, snake, move_command, pushed_anim, fall) in &snake_query {
+        let mut path = query
+            .get_mut(entity)
+            .expect("There should be a path for each snake.");
+        let mut path_builder = PathBuilder::new();
 
-    let mut path = query.single_mut();
-    let mut path_builder = PathBuilder::new();
+        let corners = [FOWARD_LEFT, FOWARD_RIGHT, BACK_RIGHT, BACK_LEFT];
+        let next_part = snake
+            .parts
+            .iter()
+            .skip(1)
+            .map(|part| Some(part))
+            .chain(once(None));
 
-    let mut current_corner = BACK_LEFT;
-    let direction = snake.head_direction();
-    let ortho_dir = IVec2::new(-direction.y, direction.x);
-    let mut corner_world_position = corner_position(
-        &current_corner,
-        &snake.head_position(),
-        &direction,
-        &ortho_dir,
-    );
+        let prev_part = once(None).chain(snake.parts.iter().map(|part| Some(part)));
+        let prev_next = prev_part.zip(next_part);
 
-    let forward_iter = snake.parts.iter().copied().zip(snake.parts.iter().skip(1));
-    let backwards_iter = snake
-        .parts
-        .iter()
-        .copied()
-        .rev()
-        .map(|(position, direction)| (position, -direction))
-        .zip(snake.parts.iter().rev().skip(1));
+        let mut part_vertices: Vec<Vec2> = Vec::with_capacity(5);
 
-    for (part, next_part) in forward_iter.chain(backwards_iter) {
-        let (position, direction) = part;
-        let ortho_dir = IVec2::new(-direction.y, direction.x);
+        for (part, (prev_part, next_part)) in snake.parts().iter().zip(prev_next) {
+            let (position, direction) = part;
+            let ortho_dir = IVec2::new(-direction.y, direction.x);
 
-        let corner_grid_pos =
-            (corner_world_position - to_world(position)) * GRID_TO_WORLD_UNIT_INVERSE;
+            part_vertices.clear();
 
-        current_corner = IVec2::new(
-            (2.0 * corner_grid_pos.dot(direction.as_vec2())) as i32,
-            (2.0 * corner_grid_pos.dot(ortho_dir.as_vec2())) as i32,
-        );
-        assert!(current_corner.abs() == IVec2::new(1, 1));
+            for corner in corners {
+                let corner_world_position =
+                    corner_position(&corner, &position, &direction, &ortho_dir);
 
-        let to_next = next_part.0 - position;
-        let to_next_relative = IVec2::new(to_next.dot(direction), to_next.dot(ortho_dir));
-        let is_next_part = |corner: IVec2| {
-            corner.dot(to_next_relative) == 1 && next_corner(&corner).dot(to_next_relative) == 1
-        };
+                let mut anim_offset = Vec2::ZERO;
+                if let Some(command) = move_command {
+                    let anim_direction = direction.as_vec2();
+                    let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
+                    anim_offset = initial_offset.lerp(Vec2::ZERO, command.lerp_time);
 
-        loop {
-            path_builder.line_to(corner_world_position);
-            if is_next_part(current_corner) {
-                break;
+                    if let Some((_, next_direction)) = next_part {
+                        let next_dir_relative = IVec2::new(
+                            next_direction.dot(*direction),
+                            next_direction.dot(ortho_dir),
+                        );
+
+                        if direction != next_direction && corner.x < 0 {
+                            if corner.dot(next_dir_relative) > 0 {
+                                if command.lerp_time < 0.5 {
+                                    let mut extra_vertex_offset =
+                                        -GRID_TO_WORLD_UNIT * anim_direction;
+                                    anim_offset = -GRID_TO_WORLD_UNIT * anim_direction
+                                        - GRID_TO_WORLD_UNIT
+                                            * (1.0 - 2.0 * command.lerp_time)
+                                            * next_direction.as_vec2();
+
+                                    if next_dir_relative.y > 0 {
+                                        mem::swap(&mut extra_vertex_offset, &mut anim_offset);
+                                    }
+
+                                    part_vertices.push(corner_world_position + extra_vertex_offset);
+                                } else {
+                                    anim_offset = -direction.as_vec2()
+                                        * GRID_TO_WORLD_UNIT
+                                        * (1.0 - 2.0 * (command.lerp_time - 0.5));
+                                }
+                            } else {
+                                anim_offset = Vec2::ZERO;
+                            }
+                        }
+                    }
+
+                    if let Some((_, prev_direction)) = prev_part {
+                        let prev_dir_relative = IVec2::new(
+                            prev_direction.dot(*direction),
+                            prev_direction.dot(ortho_dir),
+                        );
+
+                        if direction != prev_direction && corner.x > 0 {
+                            if corner.dot(prev_dir_relative) < 0 {
+                                if command.lerp_time < 0.5 {
+                                    anim_offset = direction.as_vec2()
+                                        * GRID_TO_WORLD_UNIT
+                                        * (2.0 * command.lerp_time - 1.0);
+                                } else {
+                                    let mut extra_vertex_offset = Vec2::ZERO;
+                                    anim_offset = GRID_TO_WORLD_UNIT
+                                        * (2.0 * (command.lerp_time - 0.5))
+                                        * prev_direction.as_vec2();
+
+                                    if prev_dir_relative.y > 0 {
+                                        mem::swap(&mut extra_vertex_offset, &mut anim_offset);
+                                    }
+
+                                    part_vertices.push(corner_world_position + extra_vertex_offset);
+                                }
+                            } else {
+                                anim_offset = -direction.as_vec2() * GRID_TO_WORLD_UNIT;
+                            }
+                        }
+                    }
+                }
+
+                part_vertices.push(corner_world_position + anim_offset);
             }
 
-            current_corner = next_corner(&current_corner);
-            corner_world_position =
-                corner_position(&current_corner, &position, &direction, &ortho_dir);
-        }
-    }
+            // Move sprite with gravity fall anim.
+            let fall_offset =
+                fall.map_or(Vec2::ZERO, |gravity_fall| gravity_fall.relative_y * Vec2::Y);
 
-    *path = path_builder.build();
+            let push_offset = pushed_anim.map_or(Vec2::ZERO, |command| {
+                let initial_offset = -GRID_TO_WORLD_UNIT * command.direction;
+                initial_offset.lerp(Vec2::ZERO, command.lerp_time)
+            });
+
+            let offset = fall_offset + push_offset;
+
+            path_builder.move_to(*part_vertices.first().unwrap() + offset);
+            part_vertices.iter().skip(1).for_each(|vertex| {
+                path_builder.line_to(*vertex + offset);
+            });
+
+            path_builder.close();
+        }
+
+        *path = path_builder.build();
+    }
 }
 
 pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: Entity) {
@@ -435,7 +486,7 @@ pub fn select_snake_mouse_system(
         let ndc_to_world = camera_transform.compute_matrix() * camera.projection_matrix().inverse();
         let world_pos = ndc_to_world.project_point3(ndc.extend(-1.0));
 
-        world_pos.truncate()
+        world_pos.xy()
     };
 
     let mouse_grid_position = to_grid(mouse_world_position);
