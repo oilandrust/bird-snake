@@ -1,14 +1,14 @@
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bevy_prototype_lyon::{
-    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder, StrokeMode},
-    shapes,
+    entity::ShapeBundle,
+    prelude::{DrawMode, FillMode, Path, PathBuilder, StrokeMode},
 };
 use bevy_tweening::Lens;
-use std::{collections::VecDeque, iter::once, mem};
+use std::{collections::VecDeque, mem};
 
 use crate::{
     commands::SnakeCommands,
-    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_SIZE},
+    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE},
     level_instance::{LevelEntityType, LevelInstance},
     level_pluggin::{Food, LevelEntity},
     level_template::{LevelTemplate, SnakeTemplate},
@@ -25,7 +25,7 @@ impl Plugin for SnakePluggin {
             .add_event::<DespawnSnakePartsEvent>()
             .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
             .add_system(select_snake_mouse_system)
-            .add_system_to_stage(CoreStage::PostUpdate, update_snake_mesh_system)
+            .add_system_to_stage(CoreStage::PostUpdate, update_snake_parts_mesh_system)
             .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_system)
             .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_parts_system);
     }
@@ -57,18 +57,18 @@ pub struct SnakePartSprite;
 
 #[derive(Bundle)]
 struct SnakePartBundle {
-    spatial_bundle: SpatialBundle,
     part: SnakePart,
     level_entity: LevelEntity,
+    shape: ShapeBundle,
 }
 
 impl SnakePartBundle {
-    fn new(position: IVec2, snake_index: i32, part_index: usize) -> Self {
+    fn new(snake_index: i32, part_index: usize) -> Self {
         SnakePartBundle {
-            spatial_bundle: SpatialBundle {
-                transform: Transform {
-                    translation: to_world(position).extend(0.0),
-                    ..default()
+            shape: ShapeBundle {
+                mode: DrawMode::Outlined {
+                    fill_mode: FillMode::color(SNAKE_COLORS[snake_index as usize]),
+                    outline_mode: StrokeMode::new(Color::BLACK, 1.0),
                 },
                 ..default()
             },
@@ -77,35 +77,6 @@ impl SnakePartBundle {
                 part_index,
             },
             level_entity: LevelEntity,
-        }
-    }
-}
-
-#[derive(Bundle)]
-struct SnakePartSpriteBundle {
-    sprite_bundle: SpriteBundle,
-    level_entity: LevelEntity,
-    part_sprite: SnakePartSprite,
-}
-
-impl SnakePartSpriteBundle {
-    fn new(scale: Vec2, size: Vec2, color: Color) -> Self {
-        SnakePartSpriteBundle {
-            sprite_bundle: SpriteBundle {
-                sprite: Sprite {
-                    color,
-                    custom_size: Some(size),
-                    ..default()
-                },
-                transform: Transform {
-                    scale: scale.extend(1.0),
-                    ..default()
-                },
-
-                ..default()
-            },
-            level_entity: LevelEntity,
-            part_sprite: SnakePartSprite,
         }
     }
 }
@@ -214,57 +185,39 @@ pub fn spawn_snake(
     snake_template: &SnakeTemplate,
     snake_index: i32,
 ) -> Entity {
-    // for (index, part) in snake_template.iter().enumerate() {
-    //     let mut part = commands.spawn(SnakePartBundle::new(part.0, snake_index, index));
-
-    //     part.with_children(|parent| {
-    //         parent.spawn(SnakePartSpriteBundle::new(
-    //             Vec2::ONE,
-    //             SNAKE_SIZE,
-    //             SNAKE_COLORS[snake_index as usize],
-    //         ));
-    //     });
-
-    //     if index == 0 {
-    //         part.with_children(|parent| {
-    //             parent.spawn((
-    //                 SpriteBundle {
-    //                     sprite: Sprite {
-    //                         color: Color::BLACK,
-    //                         custom_size: Some(SNAKE_EYE_SIZE),
-    //                         ..default()
-    //                     },
-    //                     transform: Transform::from_xyz(5.0, 5.0, 1.0),
-    //                     ..default()
-    //                 },
-    //                 LevelEntity,
-    //             ));
-    //         });
-    //     }
-    // }
-
-    let shape = shapes::RegularPolygon {
-        sides: 4,
-        feature: shapes::RegularPolygonFeature::Radius(SNAKE_SIZE.x),
-        ..shapes::RegularPolygon::default()
-    };
-
-    let spawn_command = commands.spawn((
+    let mut spawn_command = commands.spawn((
         Snake {
             parts: VecDeque::from(snake_template.clone()),
             index: snake_index,
         },
+        SpatialBundle { ..default() },
         LevelEntity,
         Active,
-        GeometryBuilder::build_as(
-            &shape,
-            DrawMode::Outlined {
-                fill_mode: FillMode::color(SNAKE_COLORS[snake_index as usize]),
-                outline_mode: StrokeMode::new(Color::BLACK, 1.0),
-            },
-            Transform::default(),
-        ),
     ));
+
+    spawn_command.with_children(|parent| {
+        for (index, part) in snake_template.iter().enumerate() {
+            let mut part = parent.spawn(SnakePartBundle::new(snake_index, index));
+
+            // Spawn the eye.
+            if index == 0 {
+                part.with_children(|parent| {
+                    parent.spawn((
+                        SpriteBundle {
+                            sprite: Sprite {
+                                color: Color::BLACK,
+                                custom_size: Some(SNAKE_EYE_SIZE),
+                                ..default()
+                            },
+                            transform: Transform::from_xyz(5.0, 5.0, 1.0),
+                            ..default()
+                        },
+                        LevelEntity,
+                    ));
+                });
+            }
+        }
+    });
 
     for (position, _) in snake_template {
         level_instance.mark_position_occupied(*position, LevelEntityType::Snake(snake_index));
@@ -278,17 +231,18 @@ const FOWARD_RIGHT: IVec2 = IVec2::new(1, -1);
 const BACK_RIGHT: IVec2 = IVec2::new(-1, -1);
 const BACK_LEFT: IVec2 = IVec2::new(-1, 1);
 
+const CORNERS: [IVec2; 4] = [FOWARD_LEFT, FOWARD_RIGHT, BACK_RIGHT, BACK_LEFT];
+
 fn corner_position(corner: &IVec2, position: &IVec2, direction: &IVec2, ortho_dir: &IVec2) -> Vec2 {
     to_world(*position)
         + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
         + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2()
 }
 
-pub fn update_snake_mesh_system(
-    mut query: Query<&mut Path>,
+pub fn update_snake_parts_mesh_system(
+    mut snake_parts_query: Query<(&mut Path, &SnakePart, &Parent)>,
     snake_query: Query<
         (
-            Entity,
             &Snake,
             Option<&MoveCommand>,
             Option<&PushedAnim>,
@@ -297,144 +251,127 @@ pub fn update_snake_mesh_system(
         With<Active>,
     >,
 ) {
-    for (entity, snake, move_command, pushed_anim, fall) in &snake_query {
-        let mut path = query
-            .get_mut(entity)
-            .expect("There should be a path for each snake.");
+    for (mut path, part, parent) in snake_parts_query.iter_mut() {
+        let Ok((snake, move_command, pushed_anim, fall)) = snake_query.get(parent.get()) else {
+            continue;
+        };
+
         let mut path_builder = PathBuilder::new();
 
-        let corners = [FOWARD_LEFT, FOWARD_RIGHT, BACK_RIGHT, BACK_LEFT];
-        let next_part = snake
-            .parts
-            .iter()
-            .skip(1)
-            .map(|part| Some(part))
-            .chain(once(None));
-
-        let prev_part = once(None).chain(snake.parts.iter().map(|part| Some(part)));
-        let prev_next = prev_part.zip(next_part);
+        let next_part = snake.parts.get(part.part_index + 1);
+        let prev_part = if part.part_index > 0 {
+            snake.parts.get(part.part_index - 1)
+        } else {
+            None
+        };
 
         let mut part_vertices: Vec<Vec2> = Vec::with_capacity(5);
 
-        for (part, (prev_part, next_part)) in snake.parts().iter().zip(prev_next) {
-            let (position, direction) = part;
-            let ortho_dir = IVec2::new(-direction.y, direction.x);
+        let (position, direction) = snake.parts[part.part_index];
+        let ortho_dir = IVec2::new(-direction.y, direction.x);
 
-            part_vertices.clear();
+        part_vertices.clear();
 
-            for corner in corners {
-                let corner_world_position =
-                    corner_position(&corner, &position, &direction, &ortho_dir);
+        for corner in CORNERS {
+            let corner_world_position = corner_position(&corner, &position, &direction, &ortho_dir);
 
-                let mut anim_offset = Vec2::ZERO;
-                if let Some(command) = move_command {
-                    let anim_direction = direction.as_vec2();
-                    let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
-                    anim_offset = initial_offset.lerp(Vec2::ZERO, command.lerp_time);
+            let mut anim_offset = Vec2::ZERO;
+            if let Some(command) = move_command {
+                let anim_direction = direction.as_vec2();
+                let initial_offset = -GRID_TO_WORLD_UNIT * anim_direction;
+                anim_offset = initial_offset.lerp(Vec2::ZERO, command.lerp_time);
 
-                    if let Some((_, next_direction)) = next_part {
-                        let next_dir_relative = IVec2::new(
-                            next_direction.dot(*direction),
-                            next_direction.dot(ortho_dir),
-                        );
+                if let Some((_, next_direction)) = next_part {
+                    let next_dir_relative =
+                        IVec2::new(next_direction.dot(direction), next_direction.dot(ortho_dir));
 
-                        if direction != next_direction && corner.x < 0 {
-                            if corner.dot(next_dir_relative) > 0 {
-                                if command.lerp_time < 0.5 {
-                                    let mut extra_vertex_offset =
-                                        -GRID_TO_WORLD_UNIT * anim_direction;
-                                    anim_offset = -GRID_TO_WORLD_UNIT * anim_direction
-                                        - GRID_TO_WORLD_UNIT
-                                            * (1.0 - 2.0 * command.lerp_time)
-                                            * next_direction.as_vec2();
+                    if direction != *next_direction && corner.x < 0 {
+                        if corner.dot(next_dir_relative) > 0 {
+                            if command.lerp_time < 0.5 {
+                                let mut extra_vertex_offset = -GRID_TO_WORLD_UNIT * anim_direction;
+                                anim_offset = -GRID_TO_WORLD_UNIT * anim_direction
+                                    - GRID_TO_WORLD_UNIT
+                                        * (1.0 - 2.0 * command.lerp_time)
+                                        * next_direction.as_vec2();
 
-                                    if next_dir_relative.y > 0 {
-                                        mem::swap(&mut extra_vertex_offset, &mut anim_offset);
-                                    }
-
-                                    part_vertices.push(corner_world_position + extra_vertex_offset);
-                                } else {
-                                    anim_offset = -direction.as_vec2()
-                                        * GRID_TO_WORLD_UNIT
-                                        * (1.0 - 2.0 * (command.lerp_time - 0.5));
+                                if next_dir_relative.y > 0 {
+                                    mem::swap(&mut extra_vertex_offset, &mut anim_offset);
                                 }
+
+                                part_vertices.push(corner_world_position + extra_vertex_offset);
                             } else {
-                                anim_offset = Vec2::ZERO;
+                                anim_offset = -direction.as_vec2()
+                                    * GRID_TO_WORLD_UNIT
+                                    * (1.0 - 2.0 * (command.lerp_time - 0.5));
                             }
-                        }
-                    }
-
-                    if let Some((_, prev_direction)) = prev_part {
-                        let prev_dir_relative = IVec2::new(
-                            prev_direction.dot(*direction),
-                            prev_direction.dot(ortho_dir),
-                        );
-
-                        if direction != prev_direction && corner.x > 0 {
-                            if corner.dot(prev_dir_relative) < 0 {
-                                if command.lerp_time < 0.5 {
-                                    anim_offset = direction.as_vec2()
-                                        * GRID_TO_WORLD_UNIT
-                                        * (2.0 * command.lerp_time - 1.0);
-                                } else {
-                                    let mut extra_vertex_offset = Vec2::ZERO;
-                                    anim_offset = GRID_TO_WORLD_UNIT
-                                        * (2.0 * (command.lerp_time - 0.5))
-                                        * prev_direction.as_vec2();
-
-                                    if prev_dir_relative.y > 0 {
-                                        mem::swap(&mut extra_vertex_offset, &mut anim_offset);
-                                    }
-
-                                    part_vertices.push(corner_world_position + extra_vertex_offset);
-                                }
-                            } else {
-                                anim_offset = -direction.as_vec2() * GRID_TO_WORLD_UNIT;
-                            }
+                        } else {
+                            anim_offset = Vec2::ZERO;
                         }
                     }
                 }
 
-                part_vertices.push(corner_world_position + anim_offset);
+                if let Some((_, prev_direction)) = prev_part {
+                    let prev_dir_relative =
+                        IVec2::new(prev_direction.dot(direction), prev_direction.dot(ortho_dir));
+
+                    if direction != *prev_direction && corner.x > 0 {
+                        if corner.dot(prev_dir_relative) < 0 {
+                            if command.lerp_time < 0.5 {
+                                anim_offset = direction.as_vec2()
+                                    * GRID_TO_WORLD_UNIT
+                                    * (2.0 * command.lerp_time - 1.0);
+                            } else {
+                                let mut extra_vertex_offset = Vec2::ZERO;
+                                anim_offset = GRID_TO_WORLD_UNIT
+                                    * (2.0 * (command.lerp_time - 0.5))
+                                    * prev_direction.as_vec2();
+
+                                if prev_dir_relative.y > 0 {
+                                    mem::swap(&mut extra_vertex_offset, &mut anim_offset);
+                                }
+
+                                part_vertices.push(corner_world_position + extra_vertex_offset);
+                            }
+                        } else {
+                            anim_offset = -direction.as_vec2() * GRID_TO_WORLD_UNIT;
+                        }
+                    }
+                }
             }
 
-            // Move sprite with gravity fall anim.
-            let fall_offset =
-                fall.map_or(Vec2::ZERO, |gravity_fall| gravity_fall.relative_y * Vec2::Y);
-
-            let push_offset = pushed_anim.map_or(Vec2::ZERO, |command| {
-                let initial_offset = -GRID_TO_WORLD_UNIT * command.direction;
-                initial_offset.lerp(Vec2::ZERO, command.lerp_time)
-            });
-
-            let offset = fall_offset + push_offset;
-
-            path_builder.move_to(*part_vertices.first().unwrap() + offset);
-            part_vertices.iter().skip(1).for_each(|vertex| {
-                path_builder.line_to(*vertex + offset);
-            });
-
-            path_builder.close();
+            part_vertices.push(corner_world_position + anim_offset);
         }
+
+        // Move sprite with gravity fall anim.
+        let fall_offset = fall.map_or(Vec2::ZERO, |gravity_fall| gravity_fall.relative_y * Vec2::Y);
+
+        let push_offset = pushed_anim.map_or(Vec2::ZERO, |command| {
+            let initial_offset = -GRID_TO_WORLD_UNIT * command.direction;
+            initial_offset.lerp(Vec2::ZERO, command.lerp_time)
+        });
+
+        let offset = fall_offset + push_offset;
+
+        path_builder.move_to(*part_vertices.first().unwrap() + offset);
+        part_vertices.iter().skip(1).for_each(|vertex| {
+            path_builder.line_to(*vertex + offset);
+        });
+
+        path_builder.close();
 
         *path = path_builder.build();
     }
 }
 
 pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: Entity) {
-    for (index, part) in snake.parts().iter().enumerate() {
-        commands
-            .spawn(SnakePartBundle::new(part.0, snake.index(), index))
-            .with_children(|parent| {
-                parent.spawn(SnakePartSpriteBundle::new(
-                    Vec2::ONE,
-                    SNAKE_SIZE,
-                    SNAKE_COLORS[snake.index() as usize],
-                ));
-            });
-    }
-
-    commands.entity(snake_entity).insert(Active);
+    commands
+        .entity(snake_entity)
+        .insert(Active)
+        .with_children(|parent| {
+            for (index, part) in snake.parts().iter().enumerate() {
+                let mut part = parent.spawn(SnakePartBundle::new(snake.index(), index));
+            }
+        });
 }
 
 pub fn spawn_snake_system(
@@ -529,14 +466,14 @@ pub fn respawn_snake_on_fall_system(
 pub fn grow_snake_on_move_system(
     mut snake_moved_event: EventReader<SnakeMovedEvent>,
     mut commands: Commands,
-    snake_query: Query<&Snake, With<SelectedSnake>>,
+    snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
     foods_query: Query<(Entity, &Food), With<Food>>,
 ) {
     if snake_moved_event.iter().next().is_none() {
         return;
     }
 
-    let snake = snake_query.single();
+    let (snake_entity, snake) = snake_query.single();
 
     for (food_entity, food) in &foods_query {
         if food.0 != snake.head_position() {
@@ -544,6 +481,22 @@ pub fn grow_snake_on_move_system(
         }
 
         commands.entity(food_entity).despawn();
+
+        //let (tail_direction, new_part_position) = snake.tail();
+
+        // let grow_tween = Tween::new(
+        //     EaseFunction::QuadraticInOut,
+        //     std::time::Duration::from_secs_f32(0.2),
+        //     GrowPartLens {
+        //         scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
+        //         scale_end: Vec2::ONE,
+        //         grow_direction: -tail_direction.as_vec2(),
+        //     },
+        // );
+
+        commands.entity(snake_entity).with_children(|parent| {
+            parent.spawn(SnakePartBundle::new(snake.index, snake.len() - 1));
+        });
     }
 }
 
