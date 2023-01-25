@@ -41,51 +41,46 @@ pub enum GameState {
     Game,
 }
 
-pub struct GamePlugin;
+pub struct GamePlugin {
+    args: Args,
+}
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
-        // match args.command {
-        //     Some(args::Commands::Test { test_case }) => {
-        //         app.add_plugin(AutomatedTestPluggin);
+        match self.args.command {
+            Some(args::Commands::Test { test_case }) => {
+                app.add_plugin(AutomatedTestPluggin);
 
-        //         let start_test_case =
-        //             move |mut event_writer: EventWriter<StartTestCaseEventWithIndex>| {
-        //                 let start_test_case = test_case.unwrap_or(0);
-        //                 event_writer.send(StartTestCaseEventWithIndex(start_test_case));
-        //             };
-        //         app.add_startup_system(start_test_case);
-        //     }
-        //     None => {
-        //         match args.test_level {
-        //             Some(test_level) => {
-        //                 let startup =
-        //                     move |mut event_writer: EventWriter<StartTestLevelEventWithIndex>| {
-        //                         event_writer.send(StartTestLevelEventWithIndex(test_level));
-        //                     };
-        //                 app.add_startup_system(startup);
-        //             }
-        //             None => {
-        //                 let start_level = args.level;
-        //                 let startup =
-        //                     move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
-        //                         let start_level = start_level.unwrap_or(0);
-        //                         event_writer.send(StartLevelEventWithIndex(start_level));
-        //                     };
-        //                 app.add_startup_system(startup);
-        //             }
-        //         };
-        //     }
-        // };
-
-        let startup = move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
-            let start_level = 0;
-            event_writer.send(StartLevelEventWithIndex(start_level));
+                let start_test_case =
+                    move |mut event_writer: EventWriter<StartTestCaseEventWithIndex>| {
+                        let start_test_case = test_case.unwrap_or(0);
+                        event_writer.send(StartTestCaseEventWithIndex(start_test_case));
+                    };
+                app.add_enter_system(GameState::Game, start_test_case);
+            }
+            None => {
+                match self.args.test_level {
+                    Some(test_level) => {
+                        let startup =
+                            move |mut event_writer: EventWriter<StartTestLevelEventWithIndex>| {
+                                event_writer.send(StartTestLevelEventWithIndex(test_level));
+                            };
+                        app.add_enter_system(GameState::Game, startup);
+                    }
+                    None => {
+                        let start_level = self.args.level;
+                        let startup =
+                            move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
+                                let start_level = start_level.unwrap_or(0);
+                                event_writer.send(StartLevelEventWithIndex(start_level));
+                            };
+                        app.add_enter_system(GameState::Game, startup);
+                    }
+                };
+            }
         };
-        app.add_startup_system(startup);
 
-        app.add_enter_system(GameState::Game, startup)
-            .add_exit_system(GameState::Game, despawn_with::<LevelEntity>)
+        app.add_exit_system(GameState::Game, despawn_with::<LevelEntity>)
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
@@ -113,6 +108,13 @@ pub fn despawn_with<T: Component>(mut commands: Commands, q: Query<Entity, With<
 }
 
 pub fn run(app: &mut App, args: &Args) {
+    let start_state = if args.command.is_none() && args.level.is_none() && args.test_level.is_none()
+    {
+        GameState::Menu
+    } else {
+        GameState::Game
+    };
+
     app.insert_resource(ClearColor(DARK_COLOR_PALETTE[4]))
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins.set(WindowPlugin {
@@ -124,9 +126,8 @@ pub fn run(app: &mut App, args: &Args) {
             },
             ..default()
         }))
-        .add_loopless_state(GameState::Menu)
+        .add_loopless_state(start_state)
         .add_plugin(MenuPlugin)
-        .add_plugin(GamePlugin);
-
-    app.run();
+        .add_plugin(GamePlugin { args: args.clone() })
+        .run();
 }
