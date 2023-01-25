@@ -24,6 +24,7 @@ egui = "0.20.1"
 game-grid = { version = "0.1.3", features = ["bevy-ivec2"] }
 thiserror = "1.0.38"
 bevy_prototype_lyon = "0.7.2"
+bracket-color = "~0.8"
 
 # Wasm Dependenccies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

@@ -15,6 +15,12 @@ pub const FALL_ON_SNAKE_BUG: &str = "...X.
 .bb...
 ..#...";
 
+pub const SNAKES_BUG: &str = ".......
+.....B..
+..aaAb..
+..abbb.
+...b....";
+
 pub const DEBUG_DRAW: &str = "...X.
 ...
 aaaA..Bbbb..o..o

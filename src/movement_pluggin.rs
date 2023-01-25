@@ -310,7 +310,7 @@ fn snake_smooth_movement_system(
     }
 }
 
-fn snake_push_anim_system(
+pub fn snake_push_anim_system(
     time: Res<Time>,
     mut commands: Commands,
     mut push_anim_query: Query<(Entity, &mut PushedAnim)>,
