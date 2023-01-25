@@ -32,7 +32,7 @@ impl Plugin for SnakePluggin {
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                update_snake_parts_mesh_system.after(TransformSystem::TransformPropagate),
+                update_snake_parts_mesh_system.after(update_snake_transforms_system),
             )
             .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_system)
             .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_part_system)
@@ -217,21 +217,25 @@ pub fn spawn_snake(
 
     spawn_command.with_children(|parent| {
         for (index, _) in snake_template.iter().enumerate() {
-            parent.spawn(SnakePartBundle::new(snake_index, index));
-        }
+            let mut entity = parent.spawn(SnakePartBundle::new(snake_index, index));
 
-        parent.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::BLACK,
-                    custom_size: Some(SNAKE_EYE_SIZE),
-                    ..default()
-                },
-                transform: Transform::from_xyz(5.0, 5.0, 1.0),
-                ..default()
-            },
-            LevelEntity,
-        ));
+            if index == 0 {
+                entity.with_children(|parent| {
+                    parent.spawn((
+                        SpriteBundle {
+                            sprite: Sprite {
+                                color: Color::BLACK,
+                                custom_size: Some(SNAKE_EYE_SIZE),
+                                ..default()
+                            },
+                            transform: Transform::from_xyz(5.0, 5.0, 1.0),
+                            ..default()
+                        },
+                        LevelEntity,
+                    ));
+                });
+            }
+        }
     });
 
     for (position, _) in snake_template {
@@ -417,7 +421,24 @@ pub fn set_snake_active(commands: &mut Commands, snake: &Snake, snake_entity: En
         .insert(Active)
         .with_children(|parent| {
             for (index, _) in snake.parts().iter().enumerate() {
-                parent.spawn(SnakePartBundle::new(snake.index(), index));
+                let mut entity = parent.spawn(SnakePartBundle::new(snake.index(), index));
+
+                if index == 0 {
+                    entity.with_children(|parent| {
+                        parent.spawn((
+                            SpriteBundle {
+                                sprite: Sprite {
+                                    color: Color::BLACK,
+                                    custom_size: Some(SNAKE_EYE_SIZE),
+                                    ..default()
+                                },
+                                transform: Transform::from_xyz(5.0, 5.0, 1.0),
+                                ..default()
+                            },
+                            LevelEntity,
+                        ));
+                    });
+                }
             }
         });
 }
