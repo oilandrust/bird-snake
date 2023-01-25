@@ -1,42 +1,65 @@
 use bevy::{math::Vec3Swizzles, prelude::*, transform::TransformSystem};
 use bevy_prototype_lyon::{
     entity::ShapeBundle,
-    prelude::{DrawMode, FillMode, Path, PathBuilder, StrokeMode},
+    prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin, StrokeMode},
 };
 use bevy_tweening::Lens;
-use bracket_color::{prelude::HSV, rgb::RGB};
+use bracket_color::rgb::RGB;
+use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::{collections::VecDeque, mem};
 
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE},
     level_instance::{LevelEntityType, LevelInstance},
-    level_pluggin::{Food, LevelEntity},
+    level_pluggin::{Food, LevelEntity, LOAD_LEVEL_LABEL},
     level_template::{LevelTemplate, SnakeTemplate},
     movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
     undo::{SnakeHistory, UndoEvent},
+    GameState,
 };
 
 pub struct SnakePluggin;
 
 impl Plugin for SnakePluggin {
     fn build(&self, app: &mut App) {
-        app.add_event::<DespawnSnakePartEvent>()
+        app.add_plugin(ShapePlugin)
+            .add_event::<SpawnSnakeEvent>()
+            .add_event::<DespawnSnakePartEvent>()
             .add_event::<DespawnSnakeEvent>()
             .add_event::<DespawnSnakePartsEvent>()
-            .add_system_to_stage(CoreStage::PreUpdate, spawn_snake_system)
-            .add_system(select_snake_mouse_system)
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                spawn_snake_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .after(LOAD_LEVEL_LABEL),
+            )
+            .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                update_snake_transforms_system.before(TransformSystem::TransformPropagate),
+                update_snake_transforms_system
+                    .run_in_state(GameState::Game)
+                    .before(TransformSystem::TransformPropagate),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                update_snake_parts_mesh_system.after(update_snake_transforms_system),
+                update_snake_parts_mesh_system.run_in_state(GameState::Game),
             )
-            .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_system)
-            .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_part_system)
-            .add_system_to_stage(CoreStage::PostUpdate, despawn_snake_parts_system);
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelTemplate>(),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_part_system.run_in_state(GameState::Game),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                despawn_snake_parts_system.run_in_state(GameState::Game),
+            );
     }
 }
 
@@ -258,6 +281,7 @@ fn corner_position(corner: &IVec2, position: &IVec2, direction: &IVec2, ortho_di
         + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2()
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_snake_transforms_system(
     mut snake_query: Query<
         (
