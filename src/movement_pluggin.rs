@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use iyes_loopless::prelude::{ConditionSet, IntoConditionalSystem};
+use iyes_loopless::prelude::ConditionSet;
 
 use crate::{
     commands::SnakeCommands,

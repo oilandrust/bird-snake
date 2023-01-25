@@ -1,8 +1,6 @@
 use args::Args;
 use automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use bevy::prelude::*;
-use bevy_prototype_lyon::prelude::*;
-use bevy_tweening::TweeningPlugin;
 use dev_tools_pluggin::DevToolsPlugin;
 use game_constants_pluggin::*;
 use iyes_loopless::{

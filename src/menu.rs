@@ -45,6 +45,7 @@ struct ExitButton;
 #[derive(Component)]
 struct EnterButton;
 
+#[allow(clippy::type_complexity)]
 fn button_interact_visual_system(
     mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
 ) {
@@ -63,6 +64,7 @@ fn button_interact_visual_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn on_button_interact_system<B: Component>(
     query: Query<&Interaction, (Changed<Interaction>, With<Button>, With<B>)>,
 ) -> bool {
@@ -135,7 +137,7 @@ fn setup_menu(mut commands: Commands, ass: Res<AssetServer>) {
     let butt_exit = commands
         .spawn((
             ButtonBundle {
-                style: butt_style.clone(),
+                style: butt_style,
                 ..Default::default()
             },
             ExitButton,
