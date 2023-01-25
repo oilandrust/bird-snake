@@ -8,7 +8,7 @@ use crate::{
     level_template::LevelTemplate,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
-        SnakePart, SnakePartSprite, SpawnSnakeEvent,
+        SpawnSnakeEvent,
     },
     undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
 };
@@ -20,15 +20,21 @@ const MOVE_RIGHT_KEYS: [KeyCode; 2] = [KeyCode::D, KeyCode::Right];
 
 #[derive(Component, Default)]
 pub struct MoveCommand {
-    direction: Option<IVec2>,
     velocity: f32,
-    anim_offset: f32,
+    pub lerp_time: f32,
+}
+
+#[derive(Component, Default)]
+pub struct PushedAnim {
+    pub direction: Vec2,
+    velocity: f32,
+    pub lerp_time: f32,
 }
 
 #[derive(Component, Copy, Clone)]
 pub struct GravityFall {
     velocity: f32,
-    relative_y: f32,
+    pub relative_y: f32,
     pub grid_distance: i32,
 }
 
@@ -58,8 +64,8 @@ impl Plugin for MovementPluggin {
             .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
             .add_system(gravity_system.after(grow_snake_on_move_system))
             .add_system(snake_smooth_movement_system.after(gravity_system))
-            .add_system(respawn_snake_on_fall_system.after(gravity_system))
-            .add_system_to_stage(CoreStage::PostUpdate, update_sprite_positions_system);
+            .add_system(snake_push_anim_system.after(snake_movement_control_system))
+            .add_system(respawn_snake_on_fall_system.after(gravity_system));
     }
 }
 
@@ -186,16 +192,15 @@ pub fn snake_movement_control_system(
 
     // Smooth move animation starts.
     commands.entity(snake_entity).insert(MoveCommand {
-        direction: None,
         velocity: constants.move_velocity,
-        anim_offset: GRID_TO_WORLD_UNIT,
+        lerp_time: 0.0,
     });
 
     if let Some(other_snake_entity) = other_snake_entity {
-        commands.entity(other_snake_entity).insert(MoveCommand {
-            direction: Some(*direction),
+        commands.entity(other_snake_entity).insert(PushedAnim {
+            direction: direction.as_vec2(),
             velocity: constants.move_velocity,
-            anim_offset: GRID_TO_WORLD_UNIT,
+            lerp_time: 0.0,
         });
     }
 }
@@ -297,73 +302,24 @@ fn snake_smooth_movement_system(
     mut query: Query<(Entity, &mut MoveCommand)>,
 ) {
     for (entity, mut move_command) in query.iter_mut() {
-        move_command.anim_offset -= move_command.velocity + time.delta_seconds();
-        if move_command.anim_offset < 0.0 {
+        move_command.lerp_time +=
+            move_command.velocity * GRID_TO_WORLD_UNIT_INVERSE * time.delta_seconds();
+        if move_command.lerp_time > 1.0 {
             commands.entity(entity).remove::<MoveCommand>();
         }
     }
 }
 
-#[allow(clippy::type_complexity)]
-pub fn update_sprite_positions_system(
-    snake_query: Query<(&Snake, Option<&MoveCommand>, Option<&GravityFall>), With<Active>>,
-    mut parts_query: Query<(&mut Transform, &SnakePart, &Children), Without<SnakePartSprite>>,
-    mut parts_sprite_query: Query<&mut Transform, With<SnakePartSprite>>,
+pub fn snake_push_anim_system(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut push_anim_query: Query<(Entity, &mut PushedAnim)>,
 ) {
-    for (snake, move_command, gravity_fall) in snake_query.iter() {
-        for (mut transform, part, children) in parts_query.iter_mut() {
-            if part.snake_index != snake.index() {
-                continue;
-            }
-
-            // Can happen when undoing grow, before the despawn have take effect.
-            if part.part_index > snake.len() - 1 {
-                continue;
-            }
-
-            let mut part_position = to_world(snake.parts()[part.part_index].0);
-
-            let direction = snake.parts()[part.part_index].1;
-            let direction_3 = direction.extend(0).as_vec3();
-            let ortho_dir = Vec3::Z.cross(direction_3);
-
-            transform.rotation = Quat::from_mat3(&Mat3::from_cols(direction_3, ortho_dir, Vec3::Z));
-
-            let sprite_entity = children.get(0).unwrap();
-            let mut sprite_transform = parts_sprite_query.get_mut(*sprite_entity).unwrap();
-
-            // Move sprite with move anim.
-            if let Some(move_command) = move_command {
-                let direction: IVec2 = move_command
-                    .direction
-                    .unwrap_or(snake.parts()[part.part_index].1);
-
-                part_position -= move_command.anim_offset * direction.as_vec2();
-
-                // Extend sprites at a turn to cover the gaps. Reset normal size otherwize.
-                if move_command.direction.is_none()
-                    && part.part_index < snake.len() - 1
-                    && direction != snake.parts()[part.part_index + 1].1
-                {
-                    let size_offset =
-                        direction.as_vec2() * (GRID_TO_WORLD_UNIT - move_command.anim_offset);
-                    sprite_transform.scale = transform.rotation
-                        * (Vec2::ONE + size_offset.abs() * GRID_TO_WORLD_UNIT_INVERSE).extend(1.0);
-                    part_position -= size_offset * 0.5;
-                } else {
-                    sprite_transform.scale = Vec3::ONE;
-                }
-            } else {
-                sprite_transform.scale = Vec3::ONE;
-            }
-
-            // Move sprite with gravity fall anim.
-            if let Some(gravity_fall) = gravity_fall {
-                part_position += gravity_fall.relative_y * Vec2::Y;
-            }
-
-            transform.translation.x = part_position.x;
-            transform.translation.y = part_position.y;
+    for (entity, mut move_command) in push_anim_query.iter_mut() {
+        move_command.lerp_time +=
+            move_command.velocity * GRID_TO_WORLD_UNIT_INVERSE * time.delta_seconds();
+        if move_command.lerp_time > 1.0 {
+            commands.entity(entity).remove::<PushedAnim>();
         }
     }
 }

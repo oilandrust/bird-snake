@@ -6,7 +6,7 @@ pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
 pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
 pub const SNAKE_EYE_SIZE: Vec2 = Vec2::splat(5.);
 pub const GRID_CELL_SIZE: Vec2 = SNAKE_SIZE;
-pub const MOVE_START_VELOCITY: f32 = 4.0;
+pub const MOVE_START_VELOCITY: f32 = 150.0;
 pub const JUMP_START_VELOCITY: f32 = 65.0;
 pub const GRAVITY: f32 = 300.0;
 
@@ -54,7 +54,7 @@ pub fn to_grid(position: Vec2) -> IVec2 {
 #[derive(Resource, Reflect, InspectorOptions)]
 #[reflect(InspectorOptions)]
 pub struct GameConstants {
-    #[inspector(min = 0.0, max = 10.0)]
+    #[inspector(min = 0.0, max = 300.0)]
     pub move_velocity: f32,
 
     #[inspector(min = 0.0, max = 300.0)]
