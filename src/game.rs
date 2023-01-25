@@ -10,7 +10,8 @@ use iyes_loopless::{
     state::NextState,
 };
 use level_pluggin::{
-    LevelEntity, LevelPluggin, StartLevelEventWithIndex, StartTestLevelEventWithIndex,
+    ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
+    StartTestLevelEventWithIndex,
 };
 use menu::MenuPlugin;
 use movement_pluggin::MovementPluggin;
@@ -47,6 +48,19 @@ pub struct GamePlugin {
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
+        app.add_exit_system(GameState::Game, despawn_with::<LevelEntity>)
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .with_system(back_to_menu_on_escape_system)
+                    .into(),
+            )
+            .add_plugin(LevelPluggin)
+            .add_plugin(SnakePluggin)
+            .add_plugin(MovementPluggin)
+            .add_plugin(GameConstantsPlugin)
+            .add_plugin(DevToolsPlugin);
+
         match self.args.command {
             Some(args::Commands::Test { test_case }) => {
                 app.add_plugin(AutomatedTestPluggin);
@@ -79,24 +93,16 @@ impl Plugin for GamePlugin {
                 };
             }
         };
-
-        app.add_exit_system(GameState::Game, despawn_with::<LevelEntity>)
-            .add_system_set(
-                ConditionSet::new()
-                    .run_in_state(GameState::Game)
-                    .with_system(back_to_menu_on_escape_system)
-                    .into(),
-            )
-            .add_plugin(LevelPluggin)
-            .add_plugin(SnakePluggin)
-            .add_plugin(MovementPluggin)
-            .add_plugin(GameConstantsPlugin)
-            .add_plugin(DevToolsPlugin);
     }
 }
 
-fn back_to_menu_on_escape_system(mut commands: Commands, keyboard: Res<Input<KeyCode>>) {
+fn back_to_menu_on_escape_system(
+    mut event_clear_level: EventWriter<ClearLevelEvent>,
+    mut commands: Commands,
+    keyboard: Res<Input<KeyCode>>,
+) {
     if keyboard.just_pressed(KeyCode::Escape) {
+        event_clear_level.send(ClearLevelEvent);
         commands.insert_resource(NextState(GameState::Menu));
     }
 }
@@ -126,7 +132,7 @@ pub fn run(app: &mut App, args: &Args) {
             },
             ..default()
         }))
-        .add_loopless_state(start_state)
+        .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
         .add_plugin(MenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })
         .run();
