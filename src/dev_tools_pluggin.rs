@@ -3,10 +3,12 @@ use bevy_egui::EguiPlugin;
 use bevy_inspector_egui::bevy_inspector;
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use iyes_loopless::prelude::ConditionSet;
 
 use crate::game_constants_pluggin::GameConstants;
 use crate::level_instance::LevelEntityType;
 use crate::level_instance::LevelInstance;
+use crate::GameState;
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level_template::LevelTemplate,
@@ -29,11 +31,22 @@ impl Plugin for DevToolsPlugin {
             .add_plugin(DebugLinesPlugin::default())
             .add_plugin(EguiPlugin)
             .add_plugin(DefaultInspectorConfigPlugin)
-            .add_system(toogle_dev_tools_system)
-            .add_system(inspector_ui_system)
-            .add_system_to_stage(CoreStage::Last, debug_draw_grid_system)
-            .add_system_to_stage(CoreStage::Last, debug_draw_snake_system)
-            .add_system_to_stage(CoreStage::Last, debug_draw_level_cells);
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .with_system(toogle_dev_tools_system)
+                    .with_system(inspector_ui_system)
+                    .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .with_system(debug_draw_grid_system)
+                    .with_system(debug_draw_snake_system)
+                    .with_system(debug_draw_level_cells)
+                    .into(),
+            );
     }
 }
 

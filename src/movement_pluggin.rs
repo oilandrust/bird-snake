@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use iyes_loopless::prelude::ConditionSet;
 
 use crate::{
     commands::SnakeCommands,
@@ -11,6 +12,7 @@ use crate::{
         SpawnSnakeEvent,
     },
     undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
+    GameState,
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -46,6 +48,10 @@ pub struct SnakeMovedEvent;
 
 pub struct SnakeReachGoalEvent(pub i32);
 
+const KEYBOARD_INPUT_LABEL: &str = "KEYBOARD_INPUT_LABEL";
+const SNAKE_MOVEMENT_LABEL: &str = "SNAKE_MOVEMENT_LABEL";
+const SMOOTH_MOVEMENT_LABEL: &str = "SMOOTH_MOVEMENT_LABEL";
+
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
         app.add_event::<SpawnSnakeEvent>()
@@ -53,19 +59,38 @@ impl Plugin for MovementPluggin {
             .add_event::<MoveCommandEvent>()
             .add_event::<SnakeReachGoalEvent>()
             .add_event::<crate::undo::UndoEvent>()
-            .add_system(keyboard_undo_system)
-            .add_system(keyboard_move_command_system)
-            .add_system(undo_event_system.after(keyboard_undo_system))
-            .add_system(
-                snake_movement_control_system
-                    .after(undo_event_system)
-                    .after(keyboard_move_command_system),
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(KEYBOARD_INPUT_LABEL)
+                    .with_system(keyboard_undo_system)
+                    .with_system(keyboard_move_command_system)
+                    .into(),
             )
-            .add_system(grow_snake_on_move_system.after(snake_movement_control_system))
-            .add_system(gravity_system.after(grow_snake_on_move_system))
-            .add_system(snake_smooth_movement_system.after(gravity_system))
-            .add_system(snake_push_anim_system.after(snake_movement_control_system))
-            .add_system(respawn_snake_on_fall_system.after(gravity_system));
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(SNAKE_MOVEMENT_LABEL)
+                    .after(KEYBOARD_INPUT_LABEL)
+                    .with_system(undo_event_system)
+                    .with_system(snake_movement_control_system)
+                    .with_system(grow_snake_on_move_system)
+                    .with_system(gravity_system)
+                    .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(SMOOTH_MOVEMENT_LABEL)
+                    .after(SNAKE_MOVEMENT_LABEL)
+                    .with_system(snake_smooth_movement_system)
+                    .with_system(snake_push_anim_system)
+                    .with_system(respawn_snake_on_fall_system)
+                    .into(),
+            );
     }
 }
 
@@ -205,6 +230,7 @@ pub fn snake_movement_control_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,

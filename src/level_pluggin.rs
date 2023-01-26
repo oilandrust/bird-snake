@@ -1,4 +1,5 @@
 use bevy::{app::AppExit, prelude::*};
+use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
     commands::SnakeCommands,
@@ -13,6 +14,7 @@ use crate::{
     snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
     test_levels::TEST_LEVELS,
     undo::SnakeHistory,
+    GameState,
 };
 
 pub struct StartLevelEventWithIndex(pub usize);
@@ -35,6 +37,9 @@ pub struct CurrentLevelId(pub usize);
 pub struct LevelPluggin;
 
 pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
+static PRE_LOAD_LEVEL_LABEL: &str = "PreloadLevel";
+pub static LOAD_LEVEL_LABEL: &str = "LoadLevel";
+static CHEK_LEVEL_CONDITION_LABEL: &str = "CheckLevelCondition";
 
 impl Plugin for LevelPluggin {
     fn build(&self, app: &mut App) {
@@ -47,21 +52,50 @@ impl Plugin for LevelPluggin {
                 LOAD_LEVEL_STAGE,
                 SystemStage::single_threaded(),
             )
-            .add_system_to_stage(LOAD_LEVEL_STAGE, load_level_with_index_system)
-            .add_system_to_stage(LOAD_LEVEL_STAGE, load_test_level_with_index_system)
             .add_system_to_stage(
-                LOAD_LEVEL_STAGE,
-                load_level_system
-                    .after(load_level_with_index_system)
-                    .after(load_test_level_with_index_system),
+                CoreStage::PreUpdate,
+                load_level_with_index_system
+                    .run_in_state(GameState::Game)
+                    .label(PRE_LOAD_LEVEL_LABEL),
             )
-            .add_system_to_stage(CoreStage::PreUpdate, spawn_level_entities_system)
-            .add_system_to_stage(CoreStage::PostUpdate, check_for_level_completion_system)
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                load_test_level_with_index_system
+                    .run_in_state(GameState::Game)
+                    .label(PRE_LOAD_LEVEL_LABEL),
+            )
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                load_level_system
+                    .run_in_state(GameState::Game)
+                    .label(LOAD_LEVEL_LABEL)
+                    .after(PRE_LOAD_LEVEL_LABEL),
+            )
+            .add_system_to_stage(
+                CoreStage::PreUpdate,
+                spawn_level_entities_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .after(LOAD_LEVEL_LABEL),
+            )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                snake_exit_level_system.after(check_for_level_completion_system),
+                check_for_level_completion_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(CHEK_LEVEL_CONDITION_LABEL),
             )
-            .add_system_to_stage(CoreStage::Last, clear_level_system);
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                snake_exit_level_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .after(CHEK_LEVEL_CONDITION_LABEL),
+            )
+            .add_system_to_stage(
+                CoreStage::Last,
+                clear_level_system.run_in_state(GameState::Game),
+            );
     }
 }
 

@@ -12,7 +12,7 @@ use clap::{Parser, Subcommand};
 /// // Run the automated tests for a specific test case
 /// ./snake-bird -t 0 test
 
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 pub struct Args {
     #[arg(short, long)]
     pub level: Option<usize>,
@@ -24,7 +24,7 @@ pub struct Args {
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Run automated tests.
     Test {
