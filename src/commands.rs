@@ -1,6 +1,6 @@
 use crate::{
-    level_instance::LevelInstance,
-    level_pluggin::Food,
+    level::level_instance::LevelInstance,
+    level::level_pluggin::Food,
     movement_pluggin::GravityFall,
     snake_pluggin::Snake,
     undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},

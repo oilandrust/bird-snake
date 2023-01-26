@@ -11,9 +11,9 @@ use std::{collections::VecDeque, mem};
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE},
-    level_instance::{LevelEntityType, LevelInstance},
-    level_pluggin::{Food, LevelEntity, LOAD_LEVEL_LABEL},
-    level_template::{LevelTemplate, SnakeTemplate},
+    level::level_instance::{LevelEntityType, LevelInstance},
+    level::level_pluggin::{Food, LevelEntity, LOAD_LEVEL_LABEL},
+    level::level_template::{LevelTemplate, SnakeTemplate},
     movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
     undo::{SnakeHistory, UndoEvent},
     GameState,

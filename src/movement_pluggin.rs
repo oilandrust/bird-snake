@@ -4,8 +4,8 @@ use iyes_loopless::prelude::ConditionSet;
 use crate::{
     commands::SnakeCommands,
     game_constants_pluggin::*,
-    level_instance::LevelInstance,
-    level_pluggin::Food,
+    level::level_instance::LevelInstance,
+    level::level_pluggin::Food,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SpawnSnakeEvent,

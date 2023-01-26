@@ -1,17 +1,14 @@
 Basic game:
-    Test all levels
+    Test all level
+
+    End of level:
+    * Animation
 
     Graphics:
     * Snake eye and mouth
     * Snake parts delimiter
     * Food sprite
     * Spike sprite
-
-    Controls:
-    * Reset level
-
-    End of level:
-    * animation
 
     Menu:
     * Main menu style

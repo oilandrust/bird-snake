@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
 use crate::{
-    level_instance::{LevelEntityType, LevelInstance},
-    level_pluggin::spawn_food,
-    level_template::SnakeTemplate,
+    level::level_instance::{LevelEntityType, LevelInstance},
+    level::level_pluggin::spawn_food,
+    level::level_template::SnakeTemplate,
     movement_pluggin::GravityFall,
     snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
 };

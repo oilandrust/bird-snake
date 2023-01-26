@@ -7,7 +7,7 @@ use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
 };
-use level_pluggin::{
+use level::level_pluggin::{
     ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
     StartTestLevelEventWithIndex,
 };
@@ -20,14 +20,10 @@ mod automated_test_pluggin;
 mod commands;
 mod dev_tools_pluggin;
 mod game_constants_pluggin;
-mod level_instance;
-mod level_pluggin;
-mod level_template;
-mod levels;
+mod level;
 mod menu;
 mod movement_pluggin;
 mod snake_pluggin;
-mod test_levels;
 mod undo;
 
 // Don't touch this piece, needed for Web

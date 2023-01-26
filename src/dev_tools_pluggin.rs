@@ -6,12 +6,12 @@ use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use iyes_loopless::prelude::ConditionSet;
 
 use crate::game_constants_pluggin::GameConstants;
-use crate::level_instance::LevelEntityType;
-use crate::level_instance::LevelInstance;
+use crate::level::level_instance::LevelEntityType;
+use crate::level::level_instance::LevelInstance;
 use crate::GameState;
 use crate::{
     game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
-    level_template::LevelTemplate,
+    level::level_template::LevelTemplate,
     snake_pluggin::Snake,
 };
 

@@ -4,11 +4,11 @@ use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
     game_constants_pluggin::*,
-    level_pluggin::{
+    level::level_pluggin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevel, LOAD_LEVEL_STAGE,
     },
+    level::test_levels::*,
     movement_pluggin::MoveCommandEvent,
-    test_levels::*,
 };
 
 #[derive(Clone)]
