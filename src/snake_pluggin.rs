@@ -566,7 +566,9 @@ pub fn grow_snake_on_move_system(
         return;
     }
 
-    let (snake_entity, snake) = snake_query.single();
+    let Ok((snake_entity, snake)) = snake_query.get_single() else {
+        return;
+    };
 
     for (food_entity, food) in &foods_query {
         if food.0 != snake.head_position() {

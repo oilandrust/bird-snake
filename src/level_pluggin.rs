@@ -1,4 +1,10 @@
+use std::f32::consts::PI;
+
 use bevy::{app::AppExit, prelude::*};
+use bevy_prototype_lyon::{
+    prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
+    shapes,
+};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
@@ -30,6 +36,9 @@ pub struct Food(pub IVec2);
 
 #[derive(Component, Clone, Copy)]
 pub struct Spike(pub IVec2);
+
+#[derive(Component, Clone, Copy)]
+pub struct Goal(pub IVec2);
 
 #[derive(Resource)]
 pub struct CurrentLevelId(pub usize);
@@ -80,6 +89,13 @@ impl Plugin for LevelPluggin {
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
+                activate_goal_when_all_food_eaten_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(CHEK_LEVEL_CONDITION_LABEL),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
                 check_for_level_completion_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
@@ -95,7 +111,8 @@ impl Plugin for LevelPluggin {
             .add_system_to_stage(
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
-            );
+            )
+            .add_system(rotate_goal_system);
     }
 }
 
@@ -196,20 +213,33 @@ fn spawn_level_entities_system(
     }
 
     // Spawn level goal sprite.
-    commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                color: BRIGHT_COLOR_PALETTE[8],
-                custom_size: Some(GRID_CELL_SIZE),
-                ..default()
-            },
-            transform: Transform {
-                translation: to_world(level_template.goal_position).extend(0.0),
-                ..default()
-            },
-            ..default()
-        })
-        .insert(LevelEntity);
+    {
+        let mut path_builder = PathBuilder::new();
+        let subdivisions = 14;
+        for i in 0..subdivisions {
+            let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
+            let position = Vec2::new(angle.cos(), angle.sin());
+            let offset = 0.8 + (i % 2) as f32;
+            let radius = 0.5 * GRID_TO_WORLD_UNIT * offset;
+            path_builder.line_to(radius * position);
+        }
+        path_builder.close();
+
+        let path = path_builder.build();
+
+        commands.spawn((
+            GeometryBuilder::build_as(
+                &path,
+                DrawMode::Fill(FillMode::color(Color::rgb_u8(250, 227, 25))),
+                Transform {
+                    translation: to_world(level_template.goal_position).extend(-1.0),
+                    ..default()
+                },
+            ),
+            Goal(level_template.goal_position),
+            LevelEntity,
+        ));
+    }
 
     commands
         .spawn(Camera2dBundle {
@@ -244,19 +274,20 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &m
 }
 
 pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+    let shape = shapes::Circle {
+        radius: 0.8 * GRID_TO_WORLD_UNIT / 2.0,
+        ..Default::default()
+    };
+
     commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                color: BRIGHT_COLOR_PALETTE[3],
-                custom_size: Some(GRID_CELL_SIZE),
-                ..default()
-            },
-            transform: Transform {
+        .spawn(GeometryBuilder::build_as(
+            &shape,
+            DrawMode::Fill(FillMode::color(BRIGHT_COLOR_PALETTE[3])),
+            Transform {
                 translation: to_world(*position).extend(0.0),
                 ..default()
             },
-            ..default()
-        })
+        ))
         .insert(Food(*position))
         .insert(LevelEntity);
 
@@ -280,14 +311,53 @@ pub fn clear_level_system(
     commands.remove_resource::<SnakeHistory>();
 }
 
+fn activate_goal_when_all_food_eaten_system(
+    mut commands: Commands,
+    food_query: Query<&Food>,
+    goal_query: Query<(Entity, Option<&Active>), With<Goal>>,
+) {
+    let Ok((goal_entity, active)) = goal_query.get_single() else {
+        return;
+    };
+
+    if food_query.is_empty() {
+        if active.is_none() {
+            commands.entity(goal_entity).insert(Active);
+        }
+    } else if active.is_some() {
+        commands.entity(goal_entity).remove::<Active>();
+    }
+}
+
+fn rotate_goal_system(
+    time: Res<Time>,
+    mut goal_query: Query<(&mut Transform, Option<&Active>), With<Goal>>,
+) {
+    let Ok((mut transform, active)) = goal_query.get_single_mut() else {
+        return;
+    };
+
+    if active.is_some() {
+        transform.rotate_local_z(time.delta_seconds() * 0.7);
+        transform.scale = (1.5 + 0.5 * (time.elapsed_seconds() * 1.0).sin()) * Vec3::ONE;
+    } else {
+        transform.rotate_local_z(time.delta_seconds() * 0.3);
+        transform.scale = Vec3::ONE;
+    }
+}
+
 pub fn check_for_level_completion_system(
-    level: Res<LevelTemplate>,
     mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     snakes_query: Query<&Snake, With<Active>>,
+    goal_query: Query<&Goal, With<Active>>,
 ) {
+    let Ok(goal) = goal_query.get_single() else {
+        return;
+    };
+
     let snake_at_exit = snakes_query
         .iter()
-        .find(|snake| level.goal_position == snake.head_position());
+        .find(|snake| goal.0 == snake.head_position());
     if snake_at_exit.is_none() {
         return;
     }
@@ -344,7 +414,7 @@ pub fn snake_exit_level_system(
 
     SnakeCommands::new(level_instance.as_mut(), history.as_mut()).exit_level(snake, entity, fall);
 
-    //   Select another snake if the snake was selected.
+    // Select another snake if the snake was selected.
     if selected.is_some() {
         let other_snake = snakes_query
             .iter()

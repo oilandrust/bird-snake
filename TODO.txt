@@ -4,13 +4,8 @@ Basic game:
     Graphics:
     * Snake eye and mouth
     * Snake parts delimiter
-    * Goal sprite inactive
-    * Goal sprite Active
     * Food sprite
     * Spike sprite
-
-    Eat and grow:
-    * Level unlock Condition
 
     Controls:
     * Reset level
@@ -19,14 +14,8 @@ Basic game:
     * animation
 
     Menu:
-    * Main Menu
+    * Main menu style
     * Selet level
+    * Options
 
     Ship
-
-Graphics:
-Whole new project!
-
-Research vector graphics in bevy
-
-Level Editor

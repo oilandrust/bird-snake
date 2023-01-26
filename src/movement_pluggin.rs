@@ -6,7 +6,6 @@ use crate::{
     game_constants_pluggin::*,
     level_instance::LevelInstance,
     level_pluggin::Food,
-    level_template::LevelTemplate,
     snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SpawnSnakeEvent,
@@ -135,14 +134,12 @@ type WithMovementControlSystemFilter = (
 
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
-    level_template: Res<LevelTemplate>,
     mut level_instance: ResMut<LevelInstance>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut move_command_event: EventReader<MoveCommandEvent>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
-    mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
     foods_query: Query<&Food>,
@@ -169,12 +166,6 @@ pub fn snake_movement_control_system(
 
     // Check for collition with self and walls.
     if snake.occupies_position(new_position) || level_instance.is_wall_or_spike(new_position) {
-        return;
-    }
-
-    // Level goal?
-    if new_position == level_template.goal_position {
-        snake_reach_goal_event.send(SnakeReachGoalEvent(snake.index()));
         return;
     }
 
