@@ -15,15 +15,11 @@ pub const FALL_ON_SNAKE_BUG: &str = "...X.
 .bb...
 ..#...";
 
-pub const SNAKES_BUG: &str = ".......
+pub const SNAKES_BUG: &str = "X......
 .....B..
 ..aaAb..
 ..abbb.
-...b....";
+...b....
+########";
 
-pub const DEBUG_DRAW: &str = "...X.
-...
-aaaA..Bbbb..o..o
-###################";
-
-pub const TEST_LEVELS: [&str; 3] = [DEBUG_DRAW, FALL_ON_SPIKE, FALL_ON_SNAKE_BUG];
+pub const TEST_LEVELS: [&str; 3] = [SNAKES_BUG, FALL_ON_SPIKE, FALL_ON_SNAKE_BUG];
