@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use bevy::{prelude::*, utils::HashMap};
 
-use crate::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent};
+use crate::gameplay::{snake_pluggin::Snake, undo::LevelEntityUpdateEvent};
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum LevelEntityType {

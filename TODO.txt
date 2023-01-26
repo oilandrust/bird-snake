@@ -4,9 +4,12 @@ Basic game:
     End of level:
     * Animation
 
+    Camera:
+
     Graphics:
-    * Snake eye and mouth
-    * Snake parts delimiter
+    * Better snake colors
+    * Snake round corners
+    * Snake eye and anim
     * Food sprite
     * Spike sprite
 

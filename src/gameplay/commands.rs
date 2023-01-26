@@ -1,9 +1,9 @@
 use crate::{
+    gameplay::movement_pluggin::GravityFall,
+    gameplay::snake_pluggin::Snake,
+    gameplay::undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},
     level::level_instance::LevelInstance,
     level::level_pluggin::Food,
-    movement_pluggin::GravityFall,
-    snake_pluggin::Snake,
-    undo::{BeginFall, EndFall, MoveHistoryEvent, SnakeHistory},
 };
 use bevy::prelude::*;
 

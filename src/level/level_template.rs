@@ -5,7 +5,7 @@ use bevy::{prelude::*, utils::HashSet};
 use game_grid::*;
 use thiserror::Error;
 
-use crate::game_constants_pluggin::{DOWN, LEFT, RIGHT, UP};
+use crate::gameplay::game_constants_pluggin::{DOWN, LEFT, RIGHT, UP};
 
 #[derive(GridCell, Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum Cell {

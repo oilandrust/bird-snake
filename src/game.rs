@@ -1,8 +1,6 @@
 use args::Args;
-use automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use bevy::prelude::*;
-use dev_tools_pluggin::DevToolsPlugin;
-use game_constants_pluggin::*;
+use gameplay::game_constants_pluggin::*;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
@@ -12,19 +10,16 @@ use level::level_pluggin::{
     StartTestLevelEventWithIndex,
 };
 use menu::MenuPlugin;
-use movement_pluggin::MovementPluggin;
-use snake_pluggin::SnakePluggin;
+use gameplay::movement_pluggin::MovementPluggin;
+use gameplay::snake_pluggin::SnakePluggin;
+use tools::automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
+use tools::dev_tools_pluggin::DevToolsPlugin;
 
 pub mod args;
-mod automated_test_pluggin;
-mod commands;
-mod dev_tools_pluggin;
-mod game_constants_pluggin;
+mod gameplay;
 mod level;
 mod menu;
-mod movement_pluggin;
-mod snake_pluggin;
-mod undo;
+mod tools;
 
 // Don't touch this piece, needed for Web
 #[cfg(target_arch = "wasm32")]

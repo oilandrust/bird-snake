@@ -1,11 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
+    gameplay::movement_pluggin::GravityFall,
+    gameplay::snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
     level::level_instance::{LevelEntityType, LevelInstance},
     level::level_pluggin::spawn_food,
     level::level_template::SnakeTemplate,
-    movement_pluggin::GravityFall,
-    snake_pluggin::{set_snake_active, DespawnSnakePartEvent, Snake, SnakePart},
 };
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]

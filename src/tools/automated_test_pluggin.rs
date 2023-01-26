@@ -3,12 +3,12 @@ use std::collections::VecDeque;
 use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
-    game_constants_pluggin::*,
+    gameplay::game_constants_pluggin::*,
+    gameplay::movement_pluggin::MoveCommandEvent,
     level::level_pluggin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevel, LOAD_LEVEL_STAGE,
     },
     level::test_levels::*,
-    movement_pluggin::MoveCommandEvent,
 };
 
 #[derive(Clone)]

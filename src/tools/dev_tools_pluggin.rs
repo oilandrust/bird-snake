@@ -5,14 +5,14 @@ use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use iyes_loopless::prelude::ConditionSet;
 
-use crate::game_constants_pluggin::GameConstants;
+use crate::gameplay::game_constants_pluggin::GameConstants;
 use crate::level::level_instance::LevelEntityType;
 use crate::level::level_instance::LevelInstance;
 use crate::GameState;
 use crate::{
-    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
+    gameplay::game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
+    gameplay::snake_pluggin::Snake,
     level::level_template::LevelTemplate,
-    snake_pluggin::Snake,
 };
 
 pub struct DevToolsPlugin;

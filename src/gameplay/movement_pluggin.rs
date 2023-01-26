@@ -2,15 +2,15 @@ use bevy::prelude::*;
 use iyes_loopless::prelude::ConditionSet;
 
 use crate::{
-    commands::SnakeCommands,
-    game_constants_pluggin::*,
-    level::level_instance::LevelInstance,
-    level::level_pluggin::Food,
-    snake_pluggin::{
+    gameplay::commands::SnakeCommands,
+    gameplay::game_constants_pluggin::*,
+    gameplay::snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SpawnSnakeEvent,
     },
-    undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
+    gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
+    level::level_instance::LevelInstance,
+    level::level_pluggin::Food,
     GameState,
 };
 
@@ -57,7 +57,7 @@ impl Plugin for MovementPluggin {
             .add_event::<SnakeMovedEvent>()
             .add_event::<MoveCommandEvent>()
             .add_event::<SnakeReachGoalEvent>()
-            .add_event::<crate::undo::UndoEvent>()
+            .add_event::<crate::gameplay::undo::UndoEvent>()
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Game)

@@ -9,13 +9,15 @@ use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::{collections::VecDeque, mem};
 
 use crate::{
-    commands::SnakeCommands,
-    game_constants_pluggin::{to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE},
+    gameplay::commands::SnakeCommands,
+    gameplay::game_constants_pluggin::{
+        to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE,
+    },
+    gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
+    gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{LevelEntityType, LevelInstance},
     level::level_pluggin::{Food, LevelEntity, LOAD_LEVEL_LABEL},
     level::level_template::{LevelTemplate, SnakeTemplate},
-    movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
-    undo::{SnakeHistory, UndoEvent},
     GameState,
 };
 

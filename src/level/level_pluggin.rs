@@ -8,18 +8,20 @@ use bevy_prototype_lyon::{
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
-    commands::SnakeCommands,
-    game_constants_pluggin::{
+    gameplay::commands::SnakeCommands,
+    gameplay::game_constants_pluggin::{
         to_world, BRIGHT_COLOR_PALETTE, DARK_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT,
         WALL_COLOR,
     },
+    gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
+    gameplay::snake_pluggin::{
+        Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent,
+    },
+    gameplay::undo::SnakeHistory,
     level::level_instance::{LevelEntityType, LevelInstance},
     level::level_template::{Cell, LevelTemplate},
     level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
-    movement_pluggin::{GravityFall, SnakeReachGoalEvent},
-    snake_pluggin::{Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent},
-    undo::SnakeHistory,
     GameState,
 };
 
