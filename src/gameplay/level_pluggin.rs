@@ -25,6 +25,11 @@ use crate::{
     GameState,
 };
 
+use super::{
+    game_constants_pluggin::MOVE_START_VELOCITY,
+    movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
+};
+
 pub struct StartLevelEventWithIndex(pub usize);
 pub struct StartTestLevelEventWithIndex(pub usize);
 pub struct StartLevelEventWithLevel(pub String);
@@ -105,10 +110,16 @@ impl Plugin for LevelPluggin {
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                snake_exit_level_system
+                start_snake_exit_level_system
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
                     .after(CHEK_LEVEL_CONDITION_LABEL),
+            )
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                finish_snake_exit_level_system
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system_to_stage(
                 CoreStage::Last,
@@ -350,7 +361,7 @@ fn rotate_goal_system(
 
 pub fn check_for_level_completion_system(
     mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
-    snakes_query: Query<&Snake, With<Active>>,
+    snakes_query: Query<(Entity, &Snake), (With<Active>, Without<LevelExitAnim>)>,
     goal_query: Query<&Goal, With<Active>>,
 ) {
     let Ok(goal) = goal_query.get_single() else {
@@ -359,24 +370,19 @@ pub fn check_for_level_completion_system(
 
     let snake_at_exit = snakes_query
         .iter()
-        .find(|snake| goal.0 == snake.head_position());
+        .find(|(_, snake)| goal.0 == snake.head_position());
     if snake_at_exit.is_none() {
         return;
     }
 
-    snake_reach_goal_event.send(SnakeReachGoalEvent(snake_at_exit.unwrap().index()));
+    snake_reach_goal_event.send(SnakeReachGoalEvent(snake_at_exit.unwrap().0));
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub fn snake_exit_level_system(
+#[allow(clippy::type_complexity)]
+pub fn start_snake_exit_level_system(
     mut history: ResMut<SnakeHistory>,
     mut level_instance: ResMut<LevelInstance>,
-    level_id: Res<CurrentLevelId>,
     mut snake_reach_goal_event: EventReader<SnakeReachGoalEvent>,
-    mut event_start_level: EventWriter<StartLevelEventWithIndex>,
-    mut event_clear_level: EventWriter<ClearLevelEvent>,
-    mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
-    mut exit: EventWriter<AppExit>,
     mut commands: Commands,
     snakes_query: Query<
         (Entity, &Snake, Option<&GravityFall>, Option<&SelectedSnake>),
@@ -387,43 +393,55 @@ pub fn snake_exit_level_system(
         return;
     };
 
-    // If there is only on snake left, exit level.
-    if snakes_query.iter().len() == 1 {
-        if level_id.0 == LEVELS.len() - 1 {
-            exit.send(AppExit);
-        } else {
-            event_clear_level.send(ClearLevelEvent);
-            event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
-        }
-        return;
-    }
-
-    let snake_at_exit = snakes_query
-        .iter()
-        .find(|(_, snake, _, _)| snake.index() == reach_goal_event.0);
-
-    let Some((entity, snake, fall, selected)) = snake_at_exit else {
-        return;
-    };
+    let entity = reach_goal_event.0;
+    let snake = snakes_query
+        .get(reach_goal_event.0)
+        .expect("Snake should be in query.");
 
     commands
         .entity(entity)
         .remove::<SelectedSnake>()
-        .remove::<Active>()
         .remove::<GravityFall>();
 
-    event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
-
-    SnakeCommands::new(level_instance.as_mut(), history.as_mut()).exit_level(snake, entity, fall);
+    SnakeCommands::new(level_instance.as_mut(), history.as_mut())
+        .exit_level(snake.1, entity, snake.2);
 
     // Select another snake if the snake was selected.
-    if selected.is_some() {
+    if snake.3.is_some() {
         let other_snake = snakes_query
             .iter()
             .find(|(other_entity, _, _, _)| entity != *other_entity);
 
         if let Some((next_snake_entity, _, _, _)) = other_snake {
             commands.entity(next_snake_entity).insert(SelectedSnake);
+        }
+    }
+
+    // Start anim
+    commands.entity(entity).insert(LevelExitAnim {
+        distance_to_move: snake.1.len() as i32,
+        initial_snake_position: snake.1.parts().clone().into(),
+    });
+}
+
+pub fn finish_snake_exit_level_system(
+    level_id: Res<CurrentLevelId>,
+    snake_reach_goal_event: EventReader<SnakeExitedLevelEvent>,
+    mut event_start_level: EventWriter<StartLevelEventWithIndex>,
+    mut event_clear_level: EventWriter<ClearLevelEvent>,
+    mut exit: EventWriter<AppExit>,
+    snakes_query: Query<&Snake, With<Active>>,
+) {
+    if snake_reach_goal_event.is_empty() {
+        return;
+    }
+
+    if snakes_query.is_empty() {
+        if level_id.0 == LEVELS.len() - 1 {
+            exit.send(AppExit);
+        } else {
+            event_clear_level.send(ClearLevelEvent);
+            event_start_level.send(StartLevelEventWithIndex(level_id.0 + 1));
         }
     }
 }

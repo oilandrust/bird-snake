@@ -1,17 +1,17 @@
 use args::Args;
 use bevy::prelude::*;
 use gameplay::game_constants_pluggin::*;
+use gameplay::level_pluggin::{
+    ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
+    StartTestLevelEventWithIndex,
+};
+use gameplay::movement_pluggin::MovementPluggin;
+use gameplay::snake_pluggin::SnakePluggin;
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
 };
-use level::level_pluggin::{
-    ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
-    StartTestLevelEventWithIndex,
-};
 use menu::MenuPlugin;
-use gameplay::movement_pluggin::MovementPluggin;
-use gameplay::snake_pluggin::SnakePluggin;
 use tools::automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
 use tools::dev_tools_pluggin::DevToolsPlugin;
 

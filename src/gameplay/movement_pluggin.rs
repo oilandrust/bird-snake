@@ -4,15 +4,17 @@ use iyes_loopless::prelude::ConditionSet;
 use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::*,
+    gameplay::level_pluggin::Food,
     gameplay::snake_pluggin::{
         grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
         SpawnSnakeEvent,
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::level_instance::LevelInstance,
-    level::level_pluggin::Food,
     GameState,
 };
+
+use super::snake_pluggin::{DespawnSnakeEvent, DespawnSnakePartsEvent};
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -39,13 +41,21 @@ pub struct GravityFall {
     pub grid_distance: i32,
 }
 
+#[derive(Component, Clone)]
+pub struct LevelExitAnim {
+    pub distance_to_move: i32,
+    pub initial_snake_position: Vec<(IVec2, IVec2)>,
+}
+
 pub struct MovementPluggin;
 
 pub struct MoveCommandEvent(pub IVec2);
 
 pub struct SnakeMovedEvent;
 
-pub struct SnakeReachGoalEvent(pub i32);
+pub struct SnakeReachGoalEvent(pub Entity);
+
+pub struct SnakeExitedLevelEvent;
 
 const KEYBOARD_INPUT_LABEL: &str = "KEYBOARD_INPUT_LABEL";
 const SNAKE_MOVEMENT_LABEL: &str = "SNAKE_MOVEMENT_LABEL";
@@ -57,6 +67,7 @@ impl Plugin for MovementPluggin {
             .add_event::<SnakeMovedEvent>()
             .add_event::<MoveCommandEvent>()
             .add_event::<SnakeReachGoalEvent>()
+            .add_event::<SnakeExitedLevelEvent>()
             .add_event::<crate::gameplay::undo::UndoEvent>()
             .add_system_set(
                 ConditionSet::new()
@@ -87,6 +98,7 @@ impl Plugin for MovementPluggin {
                     .after(SNAKE_MOVEMENT_LABEL)
                     .with_system(snake_smooth_movement_system)
                     .with_system(snake_push_anim_system)
+                    .with_system(snake_exit_level_anim_system)
                     .with_system(respawn_snake_on_fall_system)
                     .into(),
             );
@@ -170,19 +182,14 @@ pub fn snake_movement_control_system(
     }
 
     // Find if there is a snake in the way.
-    let other_snake = level_instance
+    let (other_snake_entity, mut other_snake) = level_instance
         .is_snake(new_position)
         .and_then(|other_snake_id| {
             other_snakes_query
                 .iter_mut()
                 .find(|(_, snake)| snake.index() == other_snake_id)
-        });
-
-    // unzip
-    let (other_snake_entity, mut other_snake) = match other_snake {
-        Some((a, b)) => (Some(a), Some(b)),
-        None => (None, None),
-    };
+        })
+        .unzip();
 
     if let Some(other_snake) = &mut other_snake {
         if !level_instance.can_push_snake(other_snake.as_ref(), *direction) {
@@ -236,7 +243,7 @@ pub fn gravity_system(
             Option<&mut GravityFall>,
             Option<&SelectedSnake>,
         ),
-        With<Active>,
+        (With<Active>, Without<LevelExitAnim>),
     >,
 ) {
     let mut sorted_snakes: Vec<(
@@ -337,6 +344,38 @@ pub fn snake_push_anim_system(
             move_command.velocity * GRID_TO_WORLD_UNIT_INVERSE * time.delta_seconds();
         if move_command.lerp_time > 1.0 {
             commands.entity(entity).remove::<PushedAnim>();
+        }
+    }
+}
+
+pub fn snake_exit_level_anim_system(
+    constants: Res<GameConstants>,
+    mut commands: Commands,
+    mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
+    mut event_snake_exited_level: EventWriter<SnakeExitedLevelEvent>,
+    mut anim_query: Query<(Entity, &mut Snake, &mut LevelExitAnim, Option<&MoveCommand>)>,
+) {
+    for (entity, mut snake, mut level_exit, move_command) in anim_query.iter_mut() {
+        if move_command.is_none() {
+            level_exit.distance_to_move -= 1;
+            if level_exit.distance_to_move < 0 {
+                commands
+                    .entity(entity)
+                    .remove::<LevelExitAnim>()
+                    .remove::<Active>();
+
+                event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
+                event_snake_exited_level.send(SnakeExitedLevelEvent);
+
+                snake.set_parts(level_exit.initial_snake_position.clone());
+            } else {
+                commands.entity(entity).insert(MoveCommand {
+                    velocity: constants.move_velocity,
+                    lerp_time: 0.0,
+                });
+                let direction = snake.head_direction();
+                snake.move_forward(direction);
+            }
         }
     }
 }

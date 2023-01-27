@@ -4,10 +4,10 @@ use bevy::{prelude::*, time::FixedTimestep};
 
 use crate::{
     gameplay::game_constants_pluggin::*,
-    gameplay::movement_pluggin::MoveCommandEvent,
-    level::level_pluggin::{
+    gameplay::level_pluggin::{
         load_level_system, CurrentLevelId, StartLevelEventWithLevel, LOAD_LEVEL_STAGE,
     },
+    gameplay::movement_pluggin::MoveCommandEvent,
     level::test_levels::*,
 };
 
@@ -93,7 +93,7 @@ fn start_test_case(
 fn init_automation(mut commands: Commands) {
     let test_cases = test_cases! {
         test_case!(FALL_ON_SNAKE_BUG, RIGHT,),
-        test_case!(REACH_GOAL_FALLING, RIGHT,),
+        test_case!(BUG_EXIT_LEVEL_ON_FALL, RIGHT,),
         test_case!(FALL_ON_SPIKE, RIGHT, RIGHT,),
     };
 

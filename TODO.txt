@@ -1,6 +1,10 @@
 Basic game:
     Test all level
 
+    Bug:
+    * Goal and fall
+    * Snake on snake
+
     End of level:
     * Animation
 
