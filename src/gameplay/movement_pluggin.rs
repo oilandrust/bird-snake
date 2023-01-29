@@ -10,11 +10,11 @@ use crate::{
         SpawnSnakeEvent,
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::level_instance::LevelInstance,
+    level::{level_instance::LevelInstance, level_template::LevelTemplate},
     GameState,
 };
 
-use super::snake_pluggin::{DespawnSnakeEvent, DespawnSnakePartsEvent};
+use super::snake_pluggin::{DespawnSnakePartEvent, PartModifier, SnakePart};
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -350,32 +350,62 @@ pub fn snake_push_anim_system(
 
 pub fn snake_exit_level_anim_system(
     constants: Res<GameConstants>,
+    level: Res<LevelTemplate>,
     mut commands: Commands,
-    mut event_despawn_snake_parts: EventWriter<DespawnSnakePartsEvent>,
+    mut event_despawn_snake_parts: EventWriter<DespawnSnakePartEvent>,
     mut event_snake_exited_level: EventWriter<SnakeExitedLevelEvent>,
-    mut anim_query: Query<(Entity, &mut Snake, &mut LevelExitAnim, Option<&MoveCommand>)>,
+    mut anim_query: Query<(
+        Entity,
+        &mut Snake,
+        &mut LevelExitAnim,
+        Option<&MoveCommand>,
+        &Children,
+    )>,
+    mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartModifier>)>,
 ) {
-    for (entity, mut snake, mut level_exit, move_command) in anim_query.iter_mut() {
-        if move_command.is_none() {
-            level_exit.distance_to_move -= 1;
-            if level_exit.distance_to_move < 0 {
-                commands
-                    .entity(entity)
-                    .remove::<LevelExitAnim>()
-                    .remove::<Active>();
+    for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
+        for &child in children {
+            let Ok((entity, part, modifier)) = snake_part_query.get_mut(child) else {
+                continue;
+            };
 
-                event_despawn_snake_parts.send(DespawnSnakePartsEvent(snake.index()));
-                event_snake_exited_level.send(SnakeExitedLevelEvent);
-
-                snake.set_parts(level_exit.initial_snake_position.clone());
-            } else {
-                commands.entity(entity).insert(MoveCommand {
-                    velocity: constants.move_velocity,
-                    lerp_time: 0.0,
+            if modifier.is_some() {
+                if (snake.parts()[part.part_index].0 - level.goal_position)
+                    .abs()
+                    .max_element()
+                    > 1
+                {
+                    event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
+                }
+            } else if snake.parts()[part.part_index].0 == level.goal_position {
+                commands.entity(entity).insert(PartModifier {
+                    clip_position: level.goal_position,
                 });
-                let direction = snake.head_direction();
-                snake.move_forward(direction);
             }
+        }
+
+        if move_command.is_some() {
+            continue;
+        }
+
+        level_exit.distance_to_move -= 1;
+
+        if level_exit.distance_to_move < 0 {
+            commands
+                .entity(entity)
+                .remove::<LevelExitAnim>()
+                .remove::<Active>();
+
+            event_snake_exited_level.send(SnakeExitedLevelEvent);
+
+            snake.set_parts(level_exit.initial_snake_position.clone());
+        } else {
+            commands.entity(entity).insert(MoveCommand {
+                velocity: 2.0 * constants.move_velocity,
+                lerp_time: 0.0,
+            });
+            let direction = snake.head_direction();
+            snake.move_forward(direction);
         }
     }
 }

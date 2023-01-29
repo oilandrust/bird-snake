@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::prelude::*;
 
-pub const GRID_TO_WORLD_UNIT: f32 = 25.;
+pub const GRID_TO_WORLD_UNIT: f32 = 35.;
 pub const GRID_TO_WORLD_UNIT_INVERSE: f32 = 1. / GRID_TO_WORLD_UNIT;
 pub const SNAKE_SIZE: Vec2 = Vec2::splat(GRID_TO_WORLD_UNIT);
 pub const SNAKE_EYE_SIZE: Vec2 = Vec2::splat(5.);
@@ -39,7 +39,16 @@ pub const BRIGHT_COLOR_PALETTE: [Color; 10] = [
 ];
 
 pub const WALL_COLOR: Color = DARK_COLOR_PALETTE[0];
-pub const SNAKE_COLORS: [Color; 2] = [BRIGHT_COLOR_PALETTE[5], BRIGHT_COLOR_PALETTE[2]];
+pub const SNAKE_COLORS: [[Color; 2]; 2] = [
+    [
+        Color::rgb(0.5647059, 0.74509805, 0.42745098),
+        Color::rgb(0.5647059, 0.74509805, 0.42745098),
+    ],
+    [
+        Color::rgb(0.972549, 0.5882353, 0.11764706),
+        Color::rgb(0.972549, 0.5113725, 0.0),
+    ],
+];
 
 pub fn to_world(position: IVec2) -> Vec2 {
     (position.as_vec2() + 0.5) * GRID_TO_WORLD_UNIT

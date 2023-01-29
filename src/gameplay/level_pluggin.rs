@@ -14,9 +14,7 @@ use crate::{
         WALL_COLOR,
     },
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
-    gameplay::snake_pluggin::{
-        Active, DespawnSnakePartsEvent, SelectedSnake, Snake, SpawnSnakeEvent,
-    },
+    gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
     level::level_instance::{LevelEntityType, LevelInstance},
     level::level_template::{Cell, LevelTemplate},
@@ -25,10 +23,7 @@ use crate::{
     GameState,
 };
 
-use super::{
-    game_constants_pluggin::MOVE_START_VELOCITY,
-    movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
-};
+use super::movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent};
 
 pub struct StartLevelEventWithIndex(pub usize);
 pub struct StartTestLevelEventWithIndex(pub usize);
@@ -225,7 +220,7 @@ fn spawn_level_entities_system(
         spawn_spike(&mut commands, position, &mut level_instance);
     }
 
-    // Spawn level goal sprite.
+    // Spawn level goal.
     {
         let mut path_builder = PathBuilder::new();
         let subdivisions = 14;
@@ -240,18 +235,38 @@ fn spawn_level_entities_system(
 
         let path = path_builder.build();
 
+        let GOAL_COLOR: Color = Color::rgb_u8(250, 227, 25);
+
+        let goal_world_position = to_world(level_template.goal_position).extend(-1.0);
+
         commands.spawn((
             GeometryBuilder::build_as(
                 &path,
-                DrawMode::Fill(FillMode::color(Color::rgb_u8(250, 227, 25))),
+                DrawMode::Fill(FillMode::color(GOAL_COLOR)),
                 Transform {
-                    translation: to_world(level_template.goal_position).extend(-1.0),
+                    translation: goal_world_position,
                     ..default()
                 },
             ),
             Goal(level_template.goal_position),
             LevelEntity,
         ));
+
+        // commands.spawn((
+        //     SpriteBundle {
+        //         sprite: Sprite {
+        //             color: GOAL_COLOR,
+        //             anchor: Anchor::CenterRight,
+        //             custom_size: Some(Vec2::new(0.5 * GRID_TO_WORLD_UNIT, GRID_TO_WORLD_UNIT)),
+        //             ..default()
+        //         },
+        //         transform: Transform::from_translation(
+        //             goal_world_position + Vec3::new(0.5 * GRID_TO_WORLD_UNIT, 0.0, 3.0),
+        //         ),
+        //         ..default()
+        //     },
+        //     LevelEntity,
+        // ));
     }
 
     commands
@@ -359,6 +374,7 @@ fn rotate_goal_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 pub fn check_for_level_completion_system(
     mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     snakes_query: Query<(Entity, &Snake), (With<Active>, Without<LevelExitAnim>)>,

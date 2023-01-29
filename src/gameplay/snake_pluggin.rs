@@ -1,10 +1,10 @@
 use bevy::{math::Vec3Swizzles, prelude::*, transform::TransformSystem};
+use bevy_prototype_debug_lines::DebugLines;
 use bevy_prototype_lyon::{
     entity::ShapeBundle,
-    prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin, StrokeMode},
+    prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
 };
-use bevy_tweening::Lens;
-use bracket_color::rgb::RGB;
+use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::{collections::VecDeque, mem};
 
@@ -80,7 +80,7 @@ pub struct SelectedSnake;
 #[derive(Component)]
 pub struct Active;
 
-#[derive(Component, PartialEq, Eq, Reflect)]
+#[derive(Component, PartialEq, Eq, Reflect, Clone)]
 pub struct SnakePart {
     pub snake_index: i32,
     pub part_index: usize,
@@ -98,19 +98,11 @@ struct SnakePartBundle {
 
 impl SnakePartBundle {
     fn new(snake_index: i32, part_index: usize) -> Self {
-        let mut base_color = SNAKE_COLORS[snake_index as usize];
-        if part_index % 2 != 0 {
-            let mut hsv = RGB::from_f32(base_color.r(), base_color.g(), base_color.b()).to_hsv();
-            hsv.s *= 1.2;
-            let rgb = hsv.to_rgb();
-            base_color = Color::rgb(rgb.r, rgb.g, rgb.b);
-        }
+        let color = SNAKE_COLORS[snake_index as usize][part_index % 2];
+
         SnakePartBundle {
             shape: ShapeBundle {
-                mode: DrawMode::Outlined {
-                    fill_mode: FillMode::color(base_color),
-                    outline_mode: StrokeMode::new(base_color, 1.0),
-                },
+                mode: DrawMode::Fill(FillMode::color(color)),
                 ..default()
             },
             part: SnakePart {
@@ -277,12 +269,6 @@ const BACK_LEFT: IVec2 = IVec2::new(-1, 1);
 
 const CORNERS: [IVec2; 4] = [FOWARD_LEFT, FOWARD_RIGHT, BACK_RIGHT, BACK_LEFT];
 
-fn corner_position(corner: &IVec2, position: &IVec2, direction: &IVec2, ortho_dir: &IVec2) -> Vec2 {
-    position.as_vec2() * GRID_TO_WORLD_UNIT
-        + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
-        + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2()
-}
-
 #[allow(clippy::type_complexity)]
 pub fn update_snake_transforms_system(
     mut snake_query: Query<
@@ -320,11 +306,17 @@ pub fn update_snake_transforms_system(
     }
 }
 
-pub fn update_snake_parts_mesh_system(
-    mut snake_parts_query: Query<(&mut Path, &SnakePart, &Parent)>,
+#[derive(Component)]
+pub struct PartModifier {
+    pub clip_position: IVec2,
+}
+
+fn update_snake_parts_mesh_system(
+    mut snake_parts_query: Query<(&mut Path, &SnakePart, Option<&PartModifier>, &Parent)>,
     snake_query: Query<(&Snake, &Transform, Option<&MoveCommand>), With<Active>>,
+    mut lines: ResMut<DebugLines>,
 ) {
-    for (mut path, part, parent) in snake_parts_query.iter_mut() {
+    for (mut path, part, modifier, parent) in snake_parts_query.iter_mut() {
         let Ok((snake, transform, move_command)) = snake_query.get(parent.get()) else {
             continue;
         };
@@ -351,7 +343,9 @@ pub fn update_snake_parts_mesh_system(
         part_vertices.clear();
 
         for corner in CORNERS {
-            let corner_world_position = corner_position(&corner, &position, &direction, &ortho_dir);
+            let corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
+                + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
+                + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2();
 
             let mut anim_offset = Vec2::ZERO;
             if let Some(command) = move_command {
@@ -427,12 +421,34 @@ pub fn update_snake_parts_mesh_system(
             initial_offset.lerp(Vec2::ZERO, command.lerp_time)
         });
 
+        // Anim offset.
+        part_vertices.iter_mut().for_each(|vertex| {
+            *vertex -= move_offset;
+        });
+
+        // Clip in world space for end of level anim.
+        if let Some(modifier) = modifier {
+            let world_clip_position = to_world(modifier.clip_position);
+            part_vertices.iter_mut().for_each(|vertex| {
+                let offset = (*vertex + transform.translation.truncate() - world_clip_position)
+                    .dot(direction.as_vec2());
+                if offset > 0.0 {
+                    *vertex -= offset * direction.as_vec2();
+                }
+            });
+        }
+
+        // Apply inv snake rotation so that it's in right space after snake transform.
         let snake_inv_rot = transform.rotation.inverse();
         let rotate = |vertex: Vec2| (snake_inv_rot * vertex.extend(0.0)).truncate();
 
-        path_builder.move_to(rotate(*part_vertices.first().unwrap() - move_offset));
+        part_vertices.iter_mut().for_each(|vertex| {
+            *vertex = rotate(*vertex);
+        });
+
+        path_builder.move_to(*part_vertices.first().unwrap());
         part_vertices.iter().skip(1).for_each(|vertex| {
-            path_builder.line_to(rotate(*vertex - move_offset));
+            path_builder.line_to(*vertex);
         });
 
         path_builder.close();
@@ -579,20 +595,22 @@ pub fn grow_snake_on_move_system(
 
         commands.entity(food_entity).despawn();
 
-        //let (tail_direction, new_part_position) = snake.tail();
+        let (tail_direction, new_part_position) = snake.tail();
 
-        // let grow_tween = Tween::new(
-        //     EaseFunction::QuadraticInOut,
-        //     std::time::Duration::from_secs_f32(0.2),
-        //     GrowPartLens {
-        //         scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
-        //         scale_end: Vec2::ONE,
-        //         grow_direction: -tail_direction.as_vec2(),
-        //     },
-        // );
+        let grow_tween = Tween::new(
+            EaseFunction::QuadraticInOut,
+            std::time::Duration::from_secs_f32(0.2),
+            GrowPartLens {
+                scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
+                scale_end: Vec2::ONE,
+                grow_direction: -tail_direction.as_vec2(),
+            },
+        );
 
         commands.entity(snake_entity).with_children(|parent| {
-            parent.spawn(SnakePartBundle::new(snake.index, snake.len() - 1));
+            parent
+                .spawn(SnakePartBundle::new(snake.index, snake.len() - 1))
+                .insert(Animator::new(grow_tween));
         });
     }
 }

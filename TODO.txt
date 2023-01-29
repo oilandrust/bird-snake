@@ -22,4 +22,6 @@ Basic game:
     * Selet level
     * Options
 
+    Sound
+
     Ship
