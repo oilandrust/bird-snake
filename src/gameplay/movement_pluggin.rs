@@ -14,7 +14,7 @@ use crate::{
     GameState,
 };
 
-use super::snake_pluggin::{DespawnSnakePartEvent, PartModifier, SnakePart};
+use super::snake_pluggin::{DespawnSnakePartEvent, PartModifier, SnakeEye, SnakePart};
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -362,6 +362,7 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartModifier>)>,
+    eye_query: Query<(Entity, &GlobalTransform), With<SnakeEye>>,
 ) {
     for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
         for &child in children {
@@ -377,6 +378,15 @@ pub fn snake_exit_level_anim_system(
                 {
                     event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
                 }
+
+                // if let Ok((entity, transform)) = eye_query.get_single() {
+                //     let offset = transform.translation().truncate() - to_world(level.goal_position);
+                //     let distance = offset.dot(snake.parts()[part.part_index].1.as_vec2());
+                //     println!("{:?}", transform);
+                //     if distance > 0.0 {
+                //         commands.entity(entity).despawn();
+                //     }
+                // }
             } else if snake.parts()[part.part_index].0 == level.goal_position {
                 commands.entity(entity).insert(PartModifier {
                     clip_position: level.goal_position,

@@ -1,27 +1,40 @@
-Basic game:
-    Test all level
-
-    Bug:
-    * Goal and fall
-    * Snake on snake
-
+Minimum to ship:
     End of level:
-    * Animation
+    * Eye disapear
 
     Camera:
+    * Posision in level enter.
+    * Follow snake.
+    * Pan.
+    * Zoom
 
-    Graphics:
-    * Better snake colors
-    * Snake round corners
-    * Snake eye and anim
-    * Food sprite
-    * Spike sprite
+    Bugs:
+    * Goal and fall
+
+    Anim:
+    * Grow part tween.
+    * Fall respawn anim.
+
+    Web:
+    * Window size.
+    * Window background while loading.
 
     Menu:
+    * Title
     * Main menu style
-    * Selet level
-    * Options
+    * Select level
 
+Ship
+    Test all levels
+   
+    Bugs:
+    * Snake on snake
+    
     Sound
 
-    Ship
+    Graphics:
+    * Snake round corners
+    * Snake eye and anim
+
+    Menu:
+    * Options

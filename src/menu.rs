@@ -45,6 +45,9 @@ struct ExitButton;
 #[derive(Component)]
 struct EnterButton;
 
+#[derive(Component)]
+struct SelectLevelButton;
+
 #[allow(clippy::type_complexity)]
 fn button_interact_visual_system(
     mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,

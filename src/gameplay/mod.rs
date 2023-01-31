@@ -1,3 +1,4 @@
+pub mod camera_plugin;
 pub mod commands;
 pub mod game_constants_pluggin;
 pub mod level_pluggin;

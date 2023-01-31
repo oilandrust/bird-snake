@@ -1,5 +1,4 @@
 use bevy::{math::Vec3Swizzles, prelude::*, transform::TransformSystem};
-use bevy_prototype_debug_lines::DebugLines;
 use bevy_prototype_lyon::{
     entity::ShapeBundle,
     prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
@@ -13,7 +12,7 @@ use crate::{
     gameplay::game_constants_pluggin::{
         to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE,
     },
-    gameplay::level_pluggin::{Food, LevelEntity, LOAD_LEVEL_LABEL},
+    gameplay::level_pluggin::{Food, LevelEntity},
     gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{LevelEntityType, LevelInstance},
@@ -34,8 +33,7 @@ impl Plugin for SnakePluggin {
                 CoreStage::PreUpdate,
                 spawn_snake_system
                     .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .after(LOAD_LEVEL_LABEL),
+                    .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
             .add_system_to_stage(
@@ -87,7 +85,7 @@ pub struct SnakePart {
 }
 
 #[derive(Component)]
-pub struct SnakePartSprite;
+pub struct SnakeEye;
 
 #[derive(Bundle)]
 struct SnakePartBundle {
@@ -249,6 +247,7 @@ pub fn spawn_snake(
                             ..default()
                         },
                         LevelEntity,
+                        SnakeEye,
                     ));
                 });
             }
@@ -314,7 +313,6 @@ pub struct PartModifier {
 fn update_snake_parts_mesh_system(
     mut snake_parts_query: Query<(&mut Path, &SnakePart, Option<&PartModifier>, &Parent)>,
     snake_query: Query<(&Snake, &Transform, Option<&MoveCommand>), With<Active>>,
-    mut lines: ResMut<DebugLines>,
 ) {
     for (mut path, part, modifier, parent) in snake_parts_query.iter_mut() {
         let Ok((snake, transform, move_command)) = snake_query.get(parent.get()) else {

@@ -1,5 +1,6 @@
 use args::Args;
 use bevy::prelude::*;
+use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_pluggin::*;
 use gameplay::level_pluggin::{
     ClearLevelEvent, LevelEntity, LevelPluggin, StartLevelEventWithIndex,
@@ -48,6 +49,7 @@ impl Plugin for GamePlugin {
             .add_plugin(SnakePluggin)
             .add_plugin(MovementPluggin)
             .add_plugin(GameConstantsPlugin)
+            .add_plugin(CameraPlugin)
             .add_plugin(DevToolsPlugin);
 
         match self.args.command {

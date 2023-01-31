@@ -64,30 +64,26 @@ impl Plugin for LevelPluggin {
                 SystemStage::single_threaded(),
             )
             .add_system_to_stage(
-                CoreStage::PreUpdate,
+                LOAD_LEVEL_STAGE,
                 load_level_with_index_system
                     .run_in_state(GameState::Game)
                     .label(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
-                CoreStage::PreUpdate,
+                LOAD_LEVEL_STAGE,
                 load_test_level_with_index_system
                     .run_in_state(GameState::Game)
                     .label(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
-                CoreStage::PreUpdate,
+                LOAD_LEVEL_STAGE,
                 load_level_system
                     .run_in_state(GameState::Game)
-                    .label(LOAD_LEVEL_LABEL)
                     .after(PRE_LOAD_LEVEL_LABEL),
             )
             .add_system_to_stage(
                 CoreStage::PreUpdate,
-                spawn_level_entities_system
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>()
-                    .after(LOAD_LEVEL_LABEL),
+                spawn_level_entities_system.run_in_state(GameState::Game),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
@@ -235,14 +231,12 @@ fn spawn_level_entities_system(
 
         let path = path_builder.build();
 
-        let GOAL_COLOR: Color = Color::rgb_u8(250, 227, 25);
-
         let goal_world_position = to_world(level_template.goal_position).extend(-1.0);
 
         commands.spawn((
             GeometryBuilder::build_as(
                 &path,
-                DrawMode::Fill(FillMode::color(GOAL_COLOR)),
+                DrawMode::Fill(FillMode::color(Color::rgb_u8(250, 227, 25))),
                 Transform {
                     translation: goal_world_position,
                     ..default()
@@ -251,50 +245,32 @@ fn spawn_level_entities_system(
             Goal(level_template.goal_position),
             LevelEntity,
         ));
-
-        // commands.spawn((
-        //     SpriteBundle {
-        //         sprite: Sprite {
-        //             color: GOAL_COLOR,
-        //             anchor: Anchor::CenterRight,
-        //             custom_size: Some(Vec2::new(0.5 * GRID_TO_WORLD_UNIT, GRID_TO_WORLD_UNIT)),
-        //             ..default()
-        //         },
-        //         transform: Transform::from_translation(
-        //             goal_world_position + Vec3::new(0.5 * GRID_TO_WORLD_UNIT, 0.0, 3.0),
-        //         ),
-        //         ..default()
-        //     },
-        //     LevelEntity,
-        // ));
     }
-
-    commands
-        .spawn(Camera2dBundle {
-            transform: Transform::from_xyz(
-                level_template.grid.width() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                level_template.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
-                50.0,
-            ),
-            ..default()
-        })
-        .insert(LevelEntity);
 }
 
 pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &mut LevelInstance) {
+    let mut path_builder = PathBuilder::new();
+    let subdivisions = 8;
+    for i in 0..subdivisions {
+        let angle = 2.0 * PI * i as f32 / (subdivisions as f32);
+        let position = Vec2::new(angle.cos(), angle.sin());
+        let offset = 0.5 + (i % 2) as f32;
+        let radius = 0.3 * GRID_TO_WORLD_UNIT * offset;
+        path_builder.line_to(radius * position);
+    }
+    path_builder.close();
+
+    let path = path_builder.build();
+
     commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                color: DARK_COLOR_PALETTE[3],
-                custom_size: Some(0.5 * GRID_CELL_SIZE),
-                ..default()
-            },
-            transform: Transform {
+        .spawn(GeometryBuilder::build_as(
+            &path,
+            DrawMode::Fill(FillMode::color(DARK_COLOR_PALETTE[3])),
+            Transform {
                 translation: to_world(*position).extend(0.0),
                 ..default()
             },
-            ..default()
-        })
+        ))
         .insert(Spike(*position))
         .insert(LevelEntity);
 
@@ -367,7 +343,7 @@ fn rotate_goal_system(
 
     if active.is_some() {
         transform.rotate_local_z(time.delta_seconds() * 0.7);
-        transform.scale = (1.5 + 0.5 * (time.elapsed_seconds() * 1.0).sin()) * Vec3::ONE;
+        transform.scale = (1.6 + 0.3 * (time.elapsed_seconds() * 1.0).sin()) * Vec3::ONE;
     } else {
         transform.rotate_local_z(time.delta_seconds() * 0.3);
         transform.scale = Vec3::ONE;
