@@ -1,5 +1,6 @@
 use bevy::{
-    input::mouse::{MouseMotion, MouseWheel},
+    input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel},
+    math::Vec3Swizzles,
     prelude::*,
 };
 use iyes_loopless::prelude::{ConditionHelpers, ConditionSet, IntoConditionalSystem};
@@ -10,7 +11,7 @@ use crate::{
 };
 
 use super::{
-    game_constants_pluggin::GRID_TO_WORLD_UNIT,
+    game_constants_pluggin::{to_world, GRID_TO_WORLD_UNIT},
     level_pluggin::{LevelEntity, StartLevelEventWithLevel},
 };
 
@@ -52,6 +53,10 @@ fn camera_setup_system(
                 level_template.grid.height() as f32 * GRID_TO_WORLD_UNIT * 0.5,
                 50.0,
             ),
+            projection: OrthographicProjection {
+                scale: 0.72,
+                ..default()
+            },
             ..default()
         })
         .insert(LevelEntity);
@@ -64,22 +69,24 @@ fn camera_follow_system(
 }
 
 fn camera_zoom_scroll_system(
-    mut level: ResMut<LevelTemplate>,
-    mut scroll_evr: EventReader<MouseWheel>,
-    mut camera: Query<(&mut OrthographicProjection, &mut GlobalTransform)>,
+    mut scroll_event: EventReader<MouseWheel>,
+    mut camera: Query<&mut OrthographicProjection>,
 ) {
-    let (mut proj, mut camera_transform) = camera.single_mut();
+    let mut projection = camera.single_mut();
 
-    use bevy::input::mouse::MouseScrollUnit;
-    for ev in scroll_evr.iter() {
-        match ev.unit {
+    const SCALE_MAX: f32 = 1.5;
+    const SCALE_MIN: f32 = 0.5;
+
+    for event in scroll_event.iter() {
+        match event.unit {
             MouseScrollUnit::Line => {
-                proj.scale -= 0.05 * ev.y;
+                projection.scale -= 0.05 * event.y;
+                projection.scale = projection.scale.clamp(SCALE_MIN, SCALE_MAX);
             }
             MouseScrollUnit::Pixel => {
                 println!(
                     "Scroll (pixel units): vertical: {}, horizontal: {}",
-                    ev.y, ev.x
+                    event.y, event.x
                 );
             }
         }
@@ -87,17 +94,28 @@ fn camera_zoom_scroll_system(
 }
 
 fn camera_pan_system(
-    mut motion_evr: EventReader<MouseMotion>,
+    mut motion_event: EventReader<MouseMotion>,
     buttons: Res<Input<MouseButton>>,
-    mut camera: Query<(&mut Camera, &mut GlobalTransform)>,
+    mut camera: Query<&mut GlobalTransform, With<Camera>>,
+    level_template: Res<LevelTemplate>,
 ) {
     if !buttons.pressed(MouseButton::Right) {
         return;
     }
-    let (_, mut camera_transform) = camera.single_mut();
+    let mut camera_transform = camera.single_mut();
 
-    for ev in motion_evr.iter() {
-        let new_pos = camera_transform.translation() - Vec3::new(ev.delta.x, -ev.delta.y, 0.0);
+    let pos_max = to_world(IVec2::new(
+        level_template.grid.width() as i32,
+        level_template.grid.height() as i32,
+    ));
+
+    for event in motion_event.iter() {
+        let mut new_pos = (camera_transform.translation()
+            - 0.5 * Vec3::new(event.delta.x, -event.delta.y, 0.0))
+        .xy();
+
+        new_pos = new_pos.clamp(Vec2::ZERO, pos_max);
+        let new_pos = new_pos.extend(camera_transform.translation().z);
         *camera_transform.translation_mut() = new_pos.into();
     }
 }

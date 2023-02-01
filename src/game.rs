@@ -117,8 +117,8 @@ pub fn run(app: &mut App, args: &Args) {
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
                 title: "Bird Snake".to_string(),
-                width: 640.0,
-                height: 420.0,
+                width: 1080.0,
+                height: 720.0,
                 ..default()
             },
             ..default()
