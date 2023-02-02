@@ -65,7 +65,9 @@ fn camera_zoom_scroll_system(
     mut scroll_event: EventReader<MouseWheel>,
     mut camera: Query<&mut OrthographicProjection>,
 ) {
-    let mut projection = camera.single_mut();
+    let Ok(mut projection) = camera.get_single_mut() else {
+        return;
+    };
 
     const SCALE_MAX: f32 = 1.5;
     const SCALE_MIN: f32 = 0.5;
@@ -93,7 +95,10 @@ fn camera_pan_system(
     if !buttons.pressed(MouseButton::Right) {
         return;
     }
-    let mut camera_transform = camera.single_mut();
+
+    let Ok(mut camera_transform) = camera.get_single_mut() else {
+        return;
+    };
 
     let pos_max = to_world(IVec2::new(
         level_template.grid.width() as i32,

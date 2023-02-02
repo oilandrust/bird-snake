@@ -13,14 +13,14 @@ use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet},
     state::NextState,
 };
-use menu::MenuPlugin;
-use tools::automated_test_pluggin::{AutomatedTestPluggin, StartTestCaseEventWithIndex};
+use menus::main_menu::MainMenuPlugin;
+use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
 use tools::dev_tools_pluggin::DevToolsPlugin;
 
 pub mod args;
 mod gameplay;
 mod level;
-mod menu;
+mod menus;
 mod tools;
 
 // Don't touch this piece, needed for Web
@@ -29,7 +29,8 @@ mod web_main;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 pub enum GameState {
-    Menu,
+    MainMenu,
+    SelectLevelMenu,
     Game,
 }
 
@@ -52,41 +53,39 @@ impl Plugin for GamePlugin {
             .add_plugin(GameConstantsPlugin)
             .add_plugin(CameraPlugin)
             .add_plugin(DevToolsPlugin)
-            .add_plugin(TweeningPlugin);
+            .add_plugin(TweeningPlugin)
+            .insert_resource(self.args.clone())
+            .insert_resource(NextLevel(self.args.level.unwrap_or(0)));
 
-        match self.args.command {
-            Some(args::Commands::Test { test_case }) => {
-                app.add_plugin(AutomatedTestPluggin);
+        //if let Some(args::Commands::Test { test_case: _ }) = self.args.command {
+        //app.add_plugin(AutomatedTestPluggin);
+        //}
 
-                let start_test_case =
-                    move |mut event_writer: EventWriter<StartTestCaseEventWithIndex>| {
-                        let start_test_case = test_case.unwrap_or(0);
-                        event_writer.send(StartTestCaseEventWithIndex(start_test_case));
-                    };
-                app.add_enter_system(GameState::Game, start_test_case);
-            }
-            None => {
-                match self.args.test_level {
-                    Some(test_level) => {
-                        let startup =
-                            move |mut event_writer: EventWriter<StartTestLevelEventWithIndex>| {
-                                event_writer.send(StartTestLevelEventWithIndex(test_level));
-                            };
-                        app.add_enter_system(GameState::Game, startup);
-                    }
-                    None => {
-                        let start_level = self.args.level;
-                        let startup =
-                            move |mut event_writer: EventWriter<StartLevelEventWithIndex>| {
-                                let start_level = start_level.unwrap_or(0);
-                                event_writer.send(StartLevelEventWithIndex(start_level));
-                            };
-                        app.add_enter_system(GameState::Game, startup);
-                    }
-                };
-            }
-        };
+        app.add_enter_system(GameState::Game, enter_game_system);
     }
+}
+
+fn enter_game_system(
+    args: Res<Args>,
+    next_level: Res<NextLevel>,
+    // mut start_test_case_event: EventWriter<StartTestCaseEventWithIndex>,
+    mut start_test_level_event: EventWriter<StartTestLevelEventWithIndex>,
+    mut start_level_event: EventWriter<StartLevelEventWithIndex>,
+) {
+    match args.command {
+        Some(args::Commands::Test { test_case: _ }) => {
+            // let start_test_case = test_case.unwrap_or(0);
+            // start_test_case_event.send(StartTestCaseEventWithIndex(start_test_case));
+        }
+        None => {
+            if let Some(test_level) = args.test_level {
+                start_test_level_event.send(StartTestLevelEventWithIndex(test_level));
+                return;
+            }
+        }
+    };
+
+    start_level_event.send(StartLevelEventWithIndex(next_level.0));
 }
 
 fn back_to_menu_on_escape_system(
@@ -96,7 +95,7 @@ fn back_to_menu_on_escape_system(
 ) {
     if keyboard.just_pressed(KeyCode::Escape) {
         event_clear_level.send(ClearLevelEvent);
-        commands.insert_resource(NextState(GameState::Menu));
+        commands.insert_resource(NextState(GameState::MainMenu));
     }
 }
 
@@ -109,7 +108,7 @@ pub fn despawn_with<T: Component>(mut commands: Commands, q: Query<Entity, With<
 pub fn run(app: &mut App, args: &Args) {
     let start_state = if args.command.is_none() && args.level.is_none() && args.test_level.is_none()
     {
-        GameState::Menu
+        GameState::MainMenu
     } else {
         GameState::Game
     };
@@ -126,7 +125,8 @@ pub fn run(app: &mut App, args: &Args) {
             ..default()
         }))
         .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
-        .add_plugin(MenuPlugin)
+        .add_plugin(MainMenuPlugin)
+        .add_plugin(SelectLevelMenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })
         .run();
 }

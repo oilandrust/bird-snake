@@ -1,3 +1,4 @@
+use bevy::prelude::Resource;
 use clap::{Parser, Subcommand};
 
 /// Cli API.
@@ -12,7 +13,7 @@ use clap::{Parser, Subcommand};
 /// // Run the automated tests for a specific test case
 /// ./snake-bird -t 0 test
 
-#[derive(Parser, Debug, Default, Clone)]
+#[derive(Parser, Debug, Default, Clone, Resource)]
 pub struct Args {
     #[arg(short, long)]
     pub level: Option<usize>,

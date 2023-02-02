@@ -9,7 +9,6 @@ Minimum to ship:
     * Goal and fall
 
     Anim:
-    * Grow part tween.
     * Fall respawn anim.
 
     Web:
@@ -21,9 +20,9 @@ Minimum to ship:
     * Main menu style
     * Select level
 
-Ship
     Test all levels
-   
+
+Ship
     Bugs:
     * Snake on snake
     
