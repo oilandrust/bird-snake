@@ -3,7 +3,9 @@ use bevy_prototype_lyon::{
     entity::ShapeBundle,
     prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
 };
-use bevy_tweening::{Animator, EaseFunction, Lens, Tween};
+use bevy_tweening::{
+    component_animator_system, AnimationSystem, Animator, EaseFunction, Lens, Tween,
+};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::{collections::VecDeque, mem};
 
@@ -36,6 +38,11 @@ impl Plugin for SnakePluggin {
                     .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
+            .add_system(
+                component_animator_system::<PartGrowAnim>
+                    .run_in_state(GameState::Game)
+                    .label(AnimationSystem::AnimationUpdate),
+            )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 update_snake_transforms_system
@@ -112,21 +119,21 @@ impl SnakePartBundle {
     }
 }
 
-struct GrowPartLens {
-    scale_start: Vec2,
-    scale_end: Vec2,
-    grow_direction: Vec2,
+#[derive(Component)]
+pub struct PartClipper {
+    pub clip_position: IVec2,
 }
 
-impl Lens<Transform> for GrowPartLens {
-    fn lerp(&mut self, target: &mut Transform, ratio: f32) {
-        let value = self.scale_start + (self.scale_end - self.scale_start) * ratio;
-        target.scale = value.extend(1.0);
+#[derive(Component)]
+pub struct PartGrowAnim {
+    pub grow_factor: f32,
+}
 
-        let mut offset = 0.5 * value * self.grow_direction - 0.5 * self.grow_direction;
-        offset *= GRID_TO_WORLD_UNIT;
-        let z = target.translation.z;
-        target.translation = (offset).extend(z);
+struct GrowPartLens;
+
+impl Lens<PartGrowAnim> for GrowPartLens {
+    fn lerp(&mut self, target: &mut PartGrowAnim, ratio: f32) {
+        target.grow_factor = ratio;
     }
 }
 
@@ -305,16 +312,18 @@ pub fn update_snake_transforms_system(
     }
 }
 
-#[derive(Component)]
-pub struct PartModifier {
-    pub clip_position: IVec2,
-}
-
+#[allow(clippy::type_complexity)]
 fn update_snake_parts_mesh_system(
-    mut snake_parts_query: Query<(&mut Path, &SnakePart, Option<&PartModifier>, &Parent)>,
+    mut snake_parts_query: Query<(
+        &mut Path,
+        &SnakePart,
+        Option<&PartClipper>,
+        Option<&PartGrowAnim>,
+        &Parent,
+    )>,
     snake_query: Query<(&Snake, &Transform, Option<&MoveCommand>), With<Active>>,
 ) {
-    for (mut path, part, modifier, parent) in snake_parts_query.iter_mut() {
+    for (mut path, part, clipper, part_grow, parent) in snake_parts_query.iter_mut() {
         let Ok((snake, transform, move_command)) = snake_query.get(parent.get()) else {
             continue;
         };
@@ -341,9 +350,17 @@ fn update_snake_parts_mesh_system(
         part_vertices.clear();
 
         for corner in CORNERS {
-            let corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
+            let mut corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
                 + corner.x as f32 * 0.5 * GRID_TO_WORLD_UNIT * direction.as_vec2()
                 + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2();
+
+            if let Some(part_grow) = part_grow {
+                if corner.x < 0 {
+                    corner_world_position = position.as_vec2() * GRID_TO_WORLD_UNIT
+                        + (0.5 - part_grow.grow_factor) * GRID_TO_WORLD_UNIT * direction.as_vec2()
+                        + corner.y as f32 * 0.5 * GRID_TO_WORLD_UNIT * ortho_dir.as_vec2();
+                }
+            }
 
             let mut anim_offset = Vec2::ZERO;
             if let Some(command) = move_command {
@@ -425,7 +442,7 @@ fn update_snake_parts_mesh_system(
         });
 
         // Clip in world space for end of level anim.
-        if let Some(modifier) = modifier {
+        if let Some(modifier) = clipper {
             let world_clip_position = to_world(modifier.clip_position);
             part_vertices.iter_mut().for_each(|vertex| {
                 let offset = (*vertex + transform.translation.truncate() - world_clip_position)
@@ -593,22 +610,16 @@ pub fn grow_snake_on_move_system(
 
         commands.entity(food_entity).despawn();
 
-        let (tail_direction, new_part_position) = snake.tail();
-
         let grow_tween = Tween::new(
             EaseFunction::QuadraticInOut,
             std::time::Duration::from_secs_f32(0.2),
-            GrowPartLens {
-                scale_start: Vec2::ONE - tail_direction.as_vec2().abs(),
-                scale_end: Vec2::ONE,
-                grow_direction: -tail_direction.as_vec2(),
-            },
+            GrowPartLens,
         );
 
         commands.entity(snake_entity).with_children(|parent| {
             parent
                 .spawn(SnakePartBundle::new(snake.index, snake.len() - 1))
-                .insert(Animator::new(grow_tween));
+                .insert((Animator::new(grow_tween), PartGrowAnim { grow_factor: 0.0 }));
         });
     }
 }

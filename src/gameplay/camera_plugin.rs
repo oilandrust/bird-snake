@@ -29,7 +29,6 @@ impl Plugin for CameraPlugin {
             ConditionSet::new()
                 .run_in_state(GameState::Game)
                 .run_if_resource_exists::<LevelInstance>()
-                .with_system(camera_follow_system)
                 .with_system(camera_zoom_scroll_system)
                 .with_system(camera_pan_system)
                 .into(),
@@ -62,12 +61,6 @@ fn camera_setup_system(
         .insert(LevelEntity);
 }
 
-fn camera_follow_system(
-    level_template: Res<LevelTemplate>,
-    mut camera_query: Query<&mut Transform, With<Camera>>,
-) {
-}
-
 fn camera_zoom_scroll_system(
     mut scroll_event: EventReader<MouseWheel>,
     mut camera: Query<&mut OrthographicProjection>,
@@ -84,10 +77,8 @@ fn camera_zoom_scroll_system(
                 projection.scale = projection.scale.clamp(SCALE_MIN, SCALE_MAX);
             }
             MouseScrollUnit::Pixel => {
-                println!(
-                    "Scroll (pixel units): vertical: {}, horizontal: {}",
-                    event.y, event.x
-                );
+                projection.scale -= 0.005 * event.y;
+                projection.scale = projection.scale.clamp(SCALE_MIN, SCALE_MAX);
             }
         }
     }

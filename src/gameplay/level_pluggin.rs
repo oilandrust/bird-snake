@@ -49,7 +49,6 @@ pub struct LevelPluggin;
 
 pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
 static PRE_LOAD_LEVEL_LABEL: &str = "PreloadLevel";
-pub static LOAD_LEVEL_LABEL: &str = "LoadLevel";
 static CHEK_LEVEL_CONDITION_LABEL: &str = "CheckLevelCondition";
 
 impl Plugin for LevelPluggin {

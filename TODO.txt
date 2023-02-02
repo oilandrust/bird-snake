@@ -3,10 +3,7 @@ Minimum to ship:
     * Eye disapear
 
     Camera:
-    * Posision in level enter.
     * Follow snake.
-    * Pan.
-    * Zoom
 
     Bugs:
     * Goal and fall

@@ -14,7 +14,7 @@ use crate::{
     GameState,
 };
 
-use super::snake_pluggin::{DespawnSnakePartEvent, PartModifier, SnakeEye, SnakePart};
+use super::snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart};
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -348,6 +348,7 @@ pub fn snake_push_anim_system(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn snake_exit_level_anim_system(
     constants: Res<GameConstants>,
     level: Res<LevelTemplate>,
@@ -361,8 +362,8 @@ pub fn snake_exit_level_anim_system(
         Option<&MoveCommand>,
         &Children,
     )>,
-    mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartModifier>)>,
-    eye_query: Query<(Entity, &GlobalTransform), With<SnakeEye>>,
+    mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
+    _eye_query: Query<(Entity, &GlobalTransform), With<SnakeEye>>,
 ) {
     for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
         for &child in children {
@@ -388,7 +389,7 @@ pub fn snake_exit_level_anim_system(
                 //     }
                 // }
             } else if snake.parts()[part.part_index].0 == level.goal_position {
-                commands.entity(entity).insert(PartModifier {
+                commands.entity(entity).insert(PartClipper {
                     clip_position: level.goal_position,
                 });
             }
