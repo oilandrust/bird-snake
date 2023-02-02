@@ -39,7 +39,7 @@ pub const BRIGHT_COLOR_PALETTE: [Color; 10] = [
 ];
 
 pub const WALL_COLOR: Color = DARK_COLOR_PALETTE[0];
-pub const SNAKE_COLORS: [[Color; 2]; 2] = [
+pub const SNAKE_COLORS: [[Color; 2]; 3] = [
     [
         Color::rgb(68.0 / 255.0, 171.0 / 255.0, 96.0 / 255.0),
         Color::rgb(0.5647059, 0.74509805, 0.42745098),
@@ -47,6 +47,10 @@ pub const SNAKE_COLORS: [[Color; 2]; 2] = [
     [
         Color::rgb(0.972549, 0.5113725, 0.0),
         Color::rgb(0.972549, 0.5882353, 0.11764706),
+    ],
+    [
+        Color::rgb(66.0 / 255.0, 135.0 / 255.0, 245.0 / 255.0),
+        Color::rgb(105.0 / 255.0, 159.0 / 255.0, 245.0 / 255.0),
     ],
 ];
 
