@@ -159,6 +159,22 @@ fn debug_draw_snake_system(
     }
 }
 
+pub fn draw_cross(lines: &mut DebugLines, position: Vec3, color: Color) {
+    lines.line_colored(
+        position + Vec3::new(5.0, 5.0, 0.0),
+        position + Vec3::new(-5.0, -5.0, 0.0),
+        0.,
+        color,
+    );
+
+    lines.line_colored(
+        position + Vec3::new(-5.0, 5.0, 0.0),
+        position + Vec3::new(5.0, -5.0, 0.0),
+        0.,
+        color,
+    );
+}
+
 fn debug_draw_level_cells(
     dev_tool_settings: Res<DevToolsSettings>,
     mut lines: ResMut<DebugLines>,
@@ -179,18 +195,6 @@ fn debug_draw_level_cells(
             LevelEntityType::Spike => Color::DARK_GRAY,
         };
 
-        lines.line_colored(
-            world_grid + Vec3::new(5.0, 5.0, 0.0),
-            world_grid + Vec3::new(-5.0, -5.0, 0.0),
-            0.,
-            color,
-        );
-
-        lines.line_colored(
-            world_grid + Vec3::new(-5.0, 5.0, 0.0),
-            world_grid + Vec3::new(5.0, -5.0, 0.0),
-            0.,
-            color,
-        );
+        draw_cross(lines.as_mut(), world_grid, color);
     }
 }

@@ -1,10 +1,4 @@
 Minimum to ship:
-    End of level:
-    * Eye disapear
-
-    Camera:
-    * Follow snake.
-
     Bugs:
     * Goal and fall
     * Crash on fall
@@ -22,7 +16,7 @@ Minimum to ship:
 
     Test all levels
 
-Ship
+Bonus
     Bugs:
     * Snake on snake
     

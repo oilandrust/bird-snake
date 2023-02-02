@@ -363,7 +363,7 @@ pub fn snake_exit_level_anim_system(
         &Children,
     )>,
     mut snake_part_query: Query<(Entity, &SnakePart, Option<&mut PartClipper>)>,
-    _eye_query: Query<(Entity, &GlobalTransform), With<SnakeEye>>,
+    eye_query: Query<(Entity, &Parent, &GlobalTransform), With<SnakeEye>>,
 ) {
     for (entity, mut snake, mut level_exit, move_command, children) in anim_query.iter_mut() {
         for &child in children {
@@ -380,14 +380,17 @@ pub fn snake_exit_level_anim_system(
                     event_despawn_snake_parts.send(DespawnSnakePartEvent(part.clone()));
                 }
 
-                // if let Ok((entity, transform)) = eye_query.get_single() {
-                //     let offset = transform.translation().truncate() - to_world(level.goal_position);
-                //     let distance = offset.dot(snake.parts()[part.part_index].1.as_vec2());
-                //     println!("{:?}", transform);
-                //     if distance > 0.0 {
-                //         commands.entity(entity).despawn();
-                //     }
-                // }
+                for (eye_entity, parent, transform) in &eye_query {
+                    if parent.get() != entity {
+                        continue;
+                    }
+                    let offset = transform.translation().truncate() - to_world(level.goal_position);
+                    let distance = offset.dot(snake.parts()[part.part_index].1.as_vec2());
+
+                    if distance > 0.0 {
+                        commands.entity(eye_entity).despawn();
+                    }
+                }
             } else if snake.parts()[part.part_index].0 == level.goal_position {
                 commands.entity(entity).insert(PartClipper {
                     clip_position: level.goal_position,
