@@ -13,7 +13,6 @@ use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::{
         to_world, BRIGHT_COLOR_PALETTE, DARK_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT,
-        WALL_COLOR,
     },
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
