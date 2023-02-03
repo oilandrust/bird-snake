@@ -15,6 +15,7 @@ use iyes_loopless::{
 };
 use menus::main_menu::MainMenuPlugin;
 use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
+use menus::MenuPlugin;
 use tools::dev_tools_pluggin::DevToolsPlugin;
 
 pub mod args;
@@ -125,6 +126,7 @@ pub fn run(app: &mut App, args: &Args) {
             ..default()
         }))
         .add_loopless_state_before_stage(CoreStage::PreUpdate, start_state)
+        .add_plugin(MenuPlugin)
         .add_plugin(MainMenuPlugin)
         .add_plugin(SelectLevelMenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })

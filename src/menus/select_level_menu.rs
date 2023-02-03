@@ -6,6 +6,8 @@ use iyes_loopless::{
 
 use crate::{despawn_with, level::levels::LEVELS, GameState};
 
+use super::{button_interact_visual_system, MenuStyles};
+
 pub struct SelectLevelMenuPlugin;
 
 impl Plugin for SelectLevelMenuPlugin {
@@ -45,25 +47,6 @@ struct LevelButton(usize);
 pub struct NextLevel(pub usize);
 
 #[allow(clippy::type_complexity)]
-fn button_interact_visual_system(
-    mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
-) {
-    for (interaction, mut color) in query.iter_mut() {
-        match interaction {
-            Interaction::Clicked => {
-                *color = BackgroundColor(Color::rgb(0.75, 0.75, 0.75));
-            }
-            Interaction::Hovered => {
-                *color = BackgroundColor(Color::rgb(0.8, 0.8, 0.8));
-            }
-            Interaction::None => {
-                *color = BackgroundColor(Color::rgb(1.0, 1.0, 1.0));
-            }
-        }
-    }
-}
-
-#[allow(clippy::type_complexity)]
 fn on_back_button_interact_system(
     mut commands: Commands,
     query: Query<&Interaction, (Changed<Interaction>, With<Button>, With<BackButton>)>,
@@ -94,33 +77,18 @@ fn on_level_button_interact_system(
     }
 }
 
-fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
+fn setup_menu(mut commands: Commands, menu_styles: Res<MenuStyles>) {
     let button_style = Style {
-        justify_content: JustifyContent::Center,
-        align_items: AlignItems::Center,
         padding: UiRect::all(Val::Px(2.0)),
         margin: UiRect::all(Val::Px(2.0)),
-        flex_grow: 1.0,
-        ..Default::default()
-    };
-    let button_text_style = TextStyle {
-        font: assets.load("Sansation-Regular.ttf"),
-        font_size: 20.0,
-        color: Color::BLACK,
+        ..menu_styles.button_style
     };
 
     let menu = commands
         .spawn((
             NodeBundle {
-                background_color: BackgroundColor(Color::rgb(0.5, 0.5, 0.5)),
-                style: Style {
-                    size: Size::new(Val::Auto, Val::Auto),
-                    margin: UiRect::all(Val::Auto),
-                    align_self: AlignSelf::Center,
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::Center,
-                    ..Default::default()
-                },
+                background_color: BackgroundColor(Color::NONE),
+                style: menu_styles.layout_node_style.clone(),
                 ..Default::default()
             },
             SelectLevelMenu,
@@ -135,13 +103,17 @@ fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
                 .spawn((
                     ButtonBundle {
                         style: button_style.clone(),
+                        background_color: BackgroundColor(Color::NONE),
                         ..Default::default()
                     },
                     LevelButton(i),
                 ))
                 .with_children(|parent| {
                     parent.spawn(TextBundle {
-                        text: Text::from_section(format!("Level {}", i), button_text_style.clone()),
+                        text: Text::from_section(
+                            format!("Level {}", i),
+                            menu_styles.button_text_style.clone(),
+                        ),
                         ..Default::default()
                     });
                 })
@@ -154,13 +126,17 @@ fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
             .spawn((
                 ButtonBundle {
                     style: button_style,
+                    background_color: BackgroundColor(Color::NONE),
                     ..Default::default()
                 },
                 BackButton,
             ))
             .with_children(|parent| {
                 parent.spawn(TextBundle {
-                    text: Text::from_section("Back to Main Menu", button_text_style.clone()),
+                    text: Text::from_section(
+                        "Back to Main Menu",
+                        menu_styles.button_text_style.clone(),
+                    ),
                     ..Default::default()
                 });
             })

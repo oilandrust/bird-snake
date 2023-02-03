@@ -1,7 +1,4 @@
 Minimum to ship:
-    Bugs:
-    * Crash on fall
-
     Web:
     * Window size.
     * Window background while loading.

@@ -1,3 +1,4 @@
+use crate::menus::{button_interact_visual_system, FONT};
 use bevy::{app::AppExit, prelude::*};
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},
@@ -5,6 +6,8 @@ use iyes_loopless::{
 };
 
 use crate::{despawn_with, GameState};
+
+use super::MenuStyles;
 
 pub struct MainMenuPlugin;
 
@@ -51,25 +54,6 @@ struct EnterButton;
 struct SelectLevelButton;
 
 #[allow(clippy::type_complexity)]
-fn button_interact_visual_system(
-    mut query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>)>,
-) {
-    for (interaction, mut color) in query.iter_mut() {
-        match interaction {
-            Interaction::Clicked => {
-                *color = BackgroundColor(Color::rgb(0.75, 0.75, 0.75));
-            }
-            Interaction::Hovered => {
-                *color = BackgroundColor(Color::rgb(0.8, 0.8, 0.8));
-            }
-            Interaction::None => {
-                *color = BackgroundColor(Color::rgb(1.0, 1.0, 1.0));
-            }
-        }
-    }
-}
-
-#[allow(clippy::type_complexity)]
 fn on_button_interact_system<B: Component>(
     query: Query<&Interaction, (Changed<Interaction>, With<Button>, With<B>)>,
 ) -> bool {
@@ -82,8 +66,8 @@ fn on_button_interact_system<B: Component>(
     false
 }
 
-fn button_exit_system(mut ev: EventWriter<AppExit>) {
-    ev.send(AppExit);
+fn button_exit_system(mut event: EventWriter<AppExit>) {
+    event.send(AppExit);
 }
 
 fn button_game_system(mut commands: Commands) {
@@ -94,33 +78,23 @@ fn button_select_level_system(mut commands: Commands) {
     commands.insert_resource(NextState(GameState::SelectLevelMenu));
 }
 
-fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
-    let button_style = Style {
-        justify_content: JustifyContent::Center,
-        align_items: AlignItems::Center,
-        padding: UiRect::all(Val::Px(8.0)),
-        margin: UiRect::all(Val::Px(4.0)),
-        flex_grow: 1.0,
-        ..Default::default()
-    };
-    let button_text_style = TextStyle {
-        font: assets.load("Sansation-Regular.ttf"),
-        font_size: 24.0,
-        color: Color::BLACK,
-    };
-
+fn setup_menu(mut commands: Commands, menu_styles: Res<MenuStyles>) {
     let menu = commands
         .spawn((
             NodeBundle {
-                background_color: BackgroundColor(Color::rgb(0.5, 0.5, 0.5)),
-                style: Style {
-                    size: Size::new(Val::Auto, Val::Auto),
-                    margin: UiRect::all(Val::Auto),
-                    align_self: AlignSelf::Center,
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::Center,
-                    ..Default::default()
-                },
+                background_color: BackgroundColor(Color::NONE),
+                style: menu_styles.layout_node_style.clone(),
+                ..Default::default()
+            },
+            MainMenu,
+        ))
+        .id();
+
+    let title = commands
+        .spawn((
+            TextBundle {
+                text: Text::from_section("BirdSnake", menu_styles.title_style.clone()),
+                style: menu_styles.button_style.clone(),
                 ..Default::default()
             },
             MainMenu,
@@ -130,14 +104,15 @@ fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
     let start_button = commands
         .spawn((
             ButtonBundle {
-                style: button_style.clone(),
+                style: menu_styles.button_style.clone(),
+                background_color: BackgroundColor(Color::NONE),
                 ..Default::default()
             },
             EnterButton,
         ))
         .with_children(|parent| {
             parent.spawn(TextBundle {
-                text: Text::from_section("Start", button_text_style.clone()),
+                text: Text::from_section("Start", menu_styles.button_text_style.clone()),
                 ..Default::default()
             });
         })
@@ -146,34 +121,36 @@ fn setup_menu(mut commands: Commands, assets: Res<AssetServer>) {
     let select_level_button = commands
         .spawn((
             ButtonBundle {
-                style: button_style.clone(),
+                style: menu_styles.button_style.clone(),
+                background_color: BackgroundColor(Color::NONE),
                 ..Default::default()
             },
             SelectLevelButton,
         ))
         .with_children(|parent| {
             parent.spawn(TextBundle {
-                text: Text::from_section("Select Level", button_text_style.clone()),
+                text: Text::from_section("Select Level", menu_styles.button_text_style.clone()),
                 ..Default::default()
             });
         })
         .id();
 
-    let mut children = vec![start_button, select_level_button];
+    let mut children = vec![title, start_button, select_level_button];
 
     #[cfg(not(target_arch = "wasm32"))]
     {
         let exit_button = commands
             .spawn((
                 ButtonBundle {
-                    style: button_style,
+                    style: menu_styles.button_style.clone(),
+                    background_color: BackgroundColor(Color::NONE),
                     ..Default::default()
                 },
                 ExitButton,
             ))
             .with_children(|btn| {
                 btn.spawn(TextBundle {
-                    text: Text::from_section("Exit Game", button_text_style.clone()),
+                    text: Text::from_section("Exit Game", menu_styles.button_text_style.clone()),
                     ..Default::default()
                 });
             })
