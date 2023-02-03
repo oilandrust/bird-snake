@@ -2,9 +2,6 @@ Minimum to ship:
     Bugs:
     * Crash on fall
 
-    Anim:
-    * Fall respawn anim.
-
     Web:
     * Window size.
     * Window background while loading.

@@ -10,14 +10,14 @@ use crate::{
         SpawnSnakeEvent,
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::{
-        level_instance::LevelInstance,
-        level_template::{self, LevelTemplate},
-    },
+    level::{level_instance::LevelInstance, level_template::LevelTemplate},
     GameState,
 };
 
-use super::snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart};
+use super::{
+    level_pluggin::Goal,
+    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart},
+};
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
 const MOVE_LEFT_KEYS: [KeyCode; 2] = [KeyCode::A, KeyCode::Left];
@@ -60,9 +60,10 @@ pub struct SnakeReachGoalEvent(pub Entity);
 
 pub struct SnakeExitedLevelEvent;
 
-const KEYBOARD_INPUT_LABEL: &str = "KEYBOARD_INPUT_LABEL";
-const SNAKE_MOVEMENT_LABEL: &str = "SNAKE_MOVEMENT_LABEL";
-const SMOOTH_MOVEMENT_LABEL: &str = "SMOOTH_MOVEMENT_LABEL";
+const KEYBOARD_INPUT: &str = "KEYBOARD_INPUT";
+const UNDO: &str = "UNDO";
+const SNAKE_MOVEMENT: &str = "SNAKE_MOVEMENT";
+const SMOOTH_MOVEMENT: &str = "SMOOTH_MOVEMENT";
 
 impl Plugin for MovementPluggin {
     fn build(&self, app: &mut App) {
@@ -76,7 +77,7 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(KEYBOARD_INPUT_LABEL)
+                    .label(KEYBOARD_INPUT)
                     .with_system(keyboard_undo_system)
                     .with_system(keyboard_move_command_system)
                     .into(),
@@ -85,9 +86,17 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(SNAKE_MOVEMENT_LABEL)
-                    .after(KEYBOARD_INPUT_LABEL)
+                    .label(UNDO)
+                    .after(KEYBOARD_INPUT)
                     .with_system(undo_event_system)
+                    .into(),
+            )
+            .add_system_set(
+                ConditionSet::new()
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>()
+                    .label(SNAKE_MOVEMENT)
+                    .after(UNDO)
                     .with_system(snake_movement_control_system)
                     .with_system(grow_snake_on_move_system)
                     .with_system(gravity_system)
@@ -97,8 +106,8 @@ impl Plugin for MovementPluggin {
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
-                    .label(SMOOTH_MOVEMENT_LABEL)
-                    .after(SNAKE_MOVEMENT_LABEL)
+                    .label(SMOOTH_MOVEMENT)
+                    .after(SNAKE_MOVEMENT)
                     .with_system(snake_smooth_movement_system)
                     .with_system(snake_push_anim_system)
                     .with_system(snake_exit_level_anim_system)
@@ -150,7 +159,6 @@ type WithMovementControlSystemFilter = (
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
     mut level_instance: ResMut<LevelInstance>,
-    level_template: Res<LevelTemplate>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut move_command_event: EventReader<MoveCommandEvent>,
@@ -160,6 +168,7 @@ pub fn snake_movement_control_system(
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
     mut other_snakes_query: Query<(Entity, &mut Snake), Without<SelectedSnake>>,
     foods_query: Query<&Food>,
+    goal_query: Query<&Goal, With<Active>>,
 ) {
     let Ok((snake_entity, mut snake)) = selected_snake_query.get_single_mut() else {
         return;
@@ -172,7 +181,17 @@ pub fn snake_movement_control_system(
     let new_position = snake.head_position() + *direction;
 
     // Check that we have enough parts to go up.
-    if *direction == IVec2::Y && snake.is_standing() && !level_instance.is_food(new_position) {
+    let is_goal = if let Ok(goal) = goal_query.get_single() {
+        goal.0 == new_position
+    } else {
+        false
+    };
+
+    if *direction == IVec2::Y
+        && snake.is_standing()
+        && !level_instance.is_food(new_position)
+        && !is_goal
+    {
         commands.entity(snake_entity).insert(GravityFall {
             velocity: constants.jump_velocity,
             relative_y: 0.0,
@@ -216,8 +235,10 @@ pub fn snake_movement_control_system(
         .eating_food(food)
         .execute();
 
-    if snake.head_position() == level_template.goal_position {
-        snake_reach_goal_event.send(SnakeReachGoalEvent(snake_entity));
+    if let Ok(goal) = goal_query.get_single() {
+        if snake.head_position() == goal.0 {
+            snake_reach_goal_event.send(SnakeReachGoalEvent(snake_entity));
+        }
     }
 
     snake_moved_event.send(SnakeMovedEvent);
