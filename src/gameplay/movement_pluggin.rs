@@ -10,7 +10,10 @@ use crate::{
         SpawnSnakeEvent,
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
-    level::{level_instance::LevelInstance, level_template::LevelTemplate},
+    level::{
+        level_instance::LevelInstance,
+        level_template::{self, LevelTemplate},
+    },
     GameState,
 };
 
@@ -147,9 +150,11 @@ type WithMovementControlSystemFilter = (
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
     mut level_instance: ResMut<LevelInstance>,
+    level_template: Res<LevelTemplate>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
     mut move_command_event: EventReader<MoveCommandEvent>,
+    mut snake_reach_goal_event: EventWriter<SnakeReachGoalEvent>,
     mut commands: Commands,
     mut snake_moved_event: EventWriter<SnakeMovedEvent>,
     mut selected_snake_query: Query<(Entity, &mut Snake), WithMovementControlSystemFilter>,
@@ -211,6 +216,10 @@ pub fn snake_movement_control_system(
         .eating_food(food)
         .execute();
 
+    if snake.head_position() == level_template.goal_position {
+        snake_reach_goal_event.send(SnakeReachGoalEvent(snake_entity));
+    }
+
     snake_moved_event.send(SnakeMovedEvent);
 
     // Smooth move animation starts.
@@ -228,13 +237,14 @@ pub fn snake_movement_control_system(
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn gravity_system(
     time: Res<Time>,
     constants: Res<GameConstants>,
     mut level: ResMut<LevelInstance>,
     mut snake_history: ResMut<SnakeHistory>,
     mut trigger_undo_event: EventWriter<UndoEvent>,
+    mut snake_reach_goal_event: EventReader<SnakeReachGoalEvent>,
     mut commands: Commands,
     mut query: Query<
         (
@@ -256,6 +266,13 @@ pub fn gravity_system(
     sorted_snakes.sort_by_key(|(_, _, _, selected_snake)| selected_snake.is_none());
 
     for (snake_entity, mut snake, gravity_fall, _) in sorted_snakes.into_iter() {
+        if snake_reach_goal_event
+            .iter()
+            .any(|event| event.0 == snake_entity)
+        {
+            continue;
+        }
+
         match gravity_fall {
             Some(mut gravity_fall) => {
                 gravity_fall.velocity -= constants.gravity * time.delta_seconds();

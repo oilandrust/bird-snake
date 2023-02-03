@@ -380,39 +380,38 @@ pub fn start_snake_exit_level_system(
         With<Active>,
     >,
 ) {
-    let Some(reach_goal_event) = snake_reach_goal_event.iter().next() else {
-        return;
-    };
+    if let Some(reach_goal_event) = snake_reach_goal_event.iter().next() {
+        let (entity, snake, gravity, selected_snake) = snakes_query
+            .get(reach_goal_event.0)
+            .expect("Snake should be in query.");
 
-    let entity = reach_goal_event.0;
-    let snake = snakes_query
-        .get(reach_goal_event.0)
-        .expect("Snake should be in query.");
+        commands
+            .entity(entity)
+            .remove::<SelectedSnake>()
+            .remove::<GravityFall>();
 
-    commands
-        .entity(entity)
-        .remove::<SelectedSnake>()
-        .remove::<GravityFall>();
+        SnakeCommands::new(level_instance.as_mut(), history.as_mut())
+            .exit_level(snake, entity, gravity);
 
-    SnakeCommands::new(level_instance.as_mut(), history.as_mut())
-        .exit_level(snake.1, entity, snake.2);
+        // Select another snake if the snake was selected.
+        if selected_snake.is_some() {
+            let other_snake = snakes_query
+                .iter()
+                .find(|(other_entity, _, _, _)| entity != *other_entity);
 
-    // Select another snake if the snake was selected.
-    if snake.3.is_some() {
-        let other_snake = snakes_query
-            .iter()
-            .find(|(other_entity, _, _, _)| entity != *other_entity);
-
-        if let Some((next_snake_entity, _, _, _)) = other_snake {
-            commands.entity(next_snake_entity).insert(SelectedSnake);
+            if let Some((next_snake_entity, _, _, _)) = other_snake {
+                commands.entity(next_snake_entity).insert(SelectedSnake);
+            }
         }
+
+        // Start anim
+        commands.entity(entity).insert(LevelExitAnim {
+            distance_to_move: snake.len() as i32,
+            initial_snake_position: snake.parts().clone().into(),
+        });
     }
 
-    // Start anim
-    commands.entity(entity).insert(LevelExitAnim {
-        distance_to_move: snake.1.len() as i32,
-        initial_snake_position: snake.1.parts().clone().into(),
-    });
+    snake_reach_goal_event.clear();
 }
 
 pub fn finish_snake_exit_level_system(

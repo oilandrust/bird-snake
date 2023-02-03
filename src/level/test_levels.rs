@@ -37,7 +37,7 @@ bbBaaAX......
 .............";
 
 pub const TEST_LEVELS: [&str; 5] = [
-    TEST_EXIT_ANIM,
+    BUG_EXIT_LEVEL_ON_FALL,
     BUG_SNAKES_ON_TOP,
     FALL_ON_SPIKE,
     FALL_ON_SNAKE_BUG,

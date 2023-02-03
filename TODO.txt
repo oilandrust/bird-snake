@@ -1,6 +1,5 @@
 Minimum to ship:
     Bugs:
-    * Goal and fall
     * Crash on fall
 
     Anim:
@@ -15,6 +14,11 @@ Minimum to ship:
     * Main menu style
 
     Test all levels
+
+    Bugs:
+    * Second escape on desktop
+    * espcape main menu on web
+    * Despawn warning exit level
 
 Bonus
     Bugs:
