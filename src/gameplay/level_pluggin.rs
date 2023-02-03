@@ -1,11 +1,13 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, time::Duration};
 
 use bevy::{app::AppExit, prelude::*};
 use bevy_prototype_lyon::{
-    prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
+    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder},
     shapes,
 };
-use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
+use iyes_loopless::prelude::{
+    AppLooplessFixedTimestepExt, ConditionHelpers, IntoConditionalSystem,
+};
 
 use crate::{
     gameplay::commands::SnakeCommands,
@@ -23,7 +25,10 @@ use crate::{
     GameState,
 };
 
-use super::movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent};
+use super::{
+    game_constants_pluggin::GameConstants,
+    movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
+};
 
 pub struct StartLevelEventWithIndex(pub usize);
 pub struct StartTestLevelEventWithIndex(pub usize);
@@ -46,6 +51,9 @@ pub struct Goal(pub IVec2);
 pub struct CurrentLevelId(pub usize);
 
 pub struct LevelPluggin;
+
+#[derive(Component, Clone, Copy)]
+pub struct Water;
 
 pub static LOAD_LEVEL_STAGE: &str = "LoadLevelStage";
 static PRE_LOAD_LEVEL_LABEL: &str = "PreloadLevel";
@@ -115,7 +123,15 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_system(rotate_goal_system);
+            .add_system(rotate_goal_system)
+            .add_fixed_timestep(Duration::from_millis(50), "my_fixed_update")
+            .add_fixed_timestep_system(
+                "my_fixed_update",
+                0,
+                animate_water
+                    .run_in_state(GameState::Game)
+                    .run_if_resource_exists::<LevelInstance>(),
+            );
     }
 }
 
@@ -175,6 +191,7 @@ fn spawn_level_entities_system(
     mut commands: Commands,
     mut event_start_level: EventReader<StartLevelEventWithLevel>,
     level_template: Res<LevelTemplate>,
+    game_constants: Res<GameConstants>,
     mut level_instance: ResMut<LevelInstance>,
 ) {
     if event_start_level.iter().next().is_none() {
@@ -190,7 +207,7 @@ fn spawn_level_entities_system(
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
-                    color: WALL_COLOR,
+                    color: game_constants.ground_color,
                     custom_size: Some(GRID_CELL_SIZE),
                     ..default()
                 },
@@ -244,6 +261,49 @@ fn spawn_level_entities_system(
             Goal(level_template.goal_position),
             LevelEntity,
         ));
+    }
+
+    // Spawn water
+    {
+        let path = build_water_path(&level_template, 0.0);
+
+        commands.spawn((
+            GeometryBuilder::build_as(
+                &path,
+                DrawMode::Fill(FillMode::color(game_constants.water_color)),
+                Transform::from_xyz(0.0, 0.0, 2.0),
+            ),
+            LevelEntity,
+            Water,
+        ));
+    }
+}
+
+fn build_water_path(level_template: &LevelTemplate, time: f32) -> Path {
+    let mut path_builder = PathBuilder::new();
+    let subdivisions = 64;
+    let water_start = -300.0;
+    let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
+
+    for i in 0..subdivisions {
+        let x = water_start + i as f32 * (water_end - water_start) / subdivisions as f32;
+        let y = 100.0 + 10.0 * (0.03 * x + time).sin();
+        path_builder.line_to(Vec2::new(x, y));
+    }
+    path_builder.line_to(Vec2::new(water_end, -100.0));
+    path_builder.line_to(Vec2::new(water_start, -100.0));
+    path_builder.close();
+
+    path_builder.build()
+}
+
+fn animate_water(
+    level_template: Res<LevelTemplate>,
+    time: Res<Time>,
+    mut water_query: Query<&mut Path, With<Water>>,
+) {
+    if let Ok(mut water_path) = water_query.get_single_mut() {
+        *water_path = build_water_path(level_template.as_ref(), time.elapsed_seconds());
     }
 }
 

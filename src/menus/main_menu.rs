@@ -1,4 +1,4 @@
-use crate::menus::{button_interact_visual_system, FONT};
+use crate::menus::button_interact_visual_system;
 use bevy::{app::AppExit, prelude::*};
 use iyes_loopless::{
     prelude::{AppLooplessStateExt, ConditionSet, IntoConditionalSystem},

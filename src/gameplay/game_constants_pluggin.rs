@@ -15,6 +15,8 @@ pub const DOWN: IVec2 = IVec2::NEG_Y;
 pub const RIGHT: IVec2 = IVec2::X;
 pub const LEFT: IVec2 = IVec2::NEG_X;
 
+pub const BACKGROUND_COLOR: Color = Color::rgb(204.0 / 255.0, 217.0 / 255.0, 1.0);
+
 // https://coolors.co/palette/565264-706677-a6808c-ccb7ae-d6cfcb
 pub const DARK_COLOR_PALETTE: [Color; 5] = [
     Color::rgb(0.3372549, 0.32156864, 0.39215687),
@@ -38,7 +40,10 @@ pub const BRIGHT_COLOR_PALETTE: [Color; 10] = [
     Color::rgb(0.15294118, 0.49019608, 0.6313726),
 ];
 
-pub const WALL_COLOR: Color = DARK_COLOR_PALETTE[0];
+pub const WALL_COLOR: Color = Color::rgb(119.0 / 255.0, 89.0 / 255.0, 54.0 / 255.0);
+pub const WATER_COLOR: Color =
+    Color::rgba(27.0 / 255.0, 85.0 / 255.0, 124.0 / 255.0, 108.0 / 255.0);
+
 pub const SNAKE_COLORS: [[Color; 2]; 3] = [
     [
         Color::rgb(68.0 / 255.0, 171.0 / 255.0, 96.0 / 255.0),
@@ -75,6 +80,12 @@ pub struct GameConstants {
 
     #[inspector(min = 0.0, max = 900.0)]
     pub gravity: f32,
+
+    pub background_color: Color,
+
+    pub ground_color: Color,
+
+    pub water_color: Color,
 }
 
 impl Default for GameConstants {
@@ -83,6 +94,9 @@ impl Default for GameConstants {
             move_velocity: MOVE_START_VELOCITY,
             jump_velocity: JUMP_START_VELOCITY,
             gravity: GRAVITY,
+            background_color: BACKGROUND_COLOR,
+            ground_color: WALL_COLOR,
+            water_color: WATER_COLOR,
         }
     }
 }
@@ -90,7 +104,12 @@ pub struct GameConstantsPlugin;
 
 impl Plugin for GameConstantsPlugin {
     fn build(&self, app: &mut App) {
-        app.register_type::<GameConstants>();
-        app.insert_resource(GameConstants::default());
+        app.register_type::<GameConstants>()
+            .insert_resource(GameConstants::default())
+            .add_system(update_colors);
     }
+}
+
+fn update_colors(mut commands: Commands, game_constants: Res<GameConstants>) {
+    commands.insert_resource(ClearColor(game_constants.background_color));
 }
