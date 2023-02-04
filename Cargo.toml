@@ -42,6 +42,7 @@ thiserror = "1.0.38"
 bevy_prototype_lyon = "0.7.2"
 bracket-color = "~0.8"
 iyes_loopless = "0.9"
+rand = "0.8.5"
 
 # Wasm Dependenccies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

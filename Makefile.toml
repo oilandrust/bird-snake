@@ -21,6 +21,9 @@ assets = array
 pngs = glob_array assets/**/*.png
 assets = array_concat ${assets} ${pngs}
 
+mp3s = glob_array assets/**/*.mp3
+assets = array_concat ${assets} ${mp3s}
+
 wavs = glob_array assets/**/*.wav
 assets = array_concat ${assets} ${wavs}
 

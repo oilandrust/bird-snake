@@ -1,6 +1,15 @@
 use std::{f32::consts::PI, time::Duration};
 
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    prelude::{shape::Quad, *},
+    reflect::TypeUuid,
+    render::{
+        mesh::Indices,
+        render_resource::{AsBindGroup, PrimitiveTopology, ShaderRef},
+    },
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+};
 use bevy_prototype_lyon::{
     prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder},
     shapes,
@@ -21,6 +30,7 @@ use crate::{
     level::level_template::{Cell, LevelTemplate},
     level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
+    water_mesh::WaterMesh2d,
     GameState,
 };
 
@@ -122,11 +132,9 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_system(rotate_goal_system)
-            .add_fixed_timestep(Duration::from_millis(50), "my_fixed_update")
-            .add_fixed_timestep_system(
-                "my_fixed_update",
-                0,
+            .add_plugin(MaterialPlugin::<WaterMaterial>::default())
+            .add_system(rotate_goal_system.run_in_state(GameState::Game))
+            .add_system(
                 animate_water
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>(),
@@ -192,6 +200,8 @@ fn spawn_level_entities_system(
     level_template: Res<LevelTemplate>,
     game_constants: Res<GameConstants>,
     mut level_instance: ResMut<LevelInstance>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
@@ -264,45 +274,85 @@ fn spawn_level_entities_system(
 
     // Spawn water
     {
-        let path = build_water_path(&level_template, 0.0);
+        let subdivisions = 32;
+        let water_start = -300.0;
+        let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
+        let water_mesh = WaterMeshBuilder::new(subdivisions, water_start, water_end).build();
 
         commands.spawn((
-            GeometryBuilder::build_as(
-                &path,
-                DrawMode::Fill(FillMode::color(game_constants.water_color)),
-                Transform::from_xyz(0.0, 0.0, 2.0),
-            ),
+            SpatialBundle::VISIBLE_IDENTITY,
+            WaterMesh2d,
+            Mesh2dHandle(meshes.add(water_mesh)),
+            // MaterialMesh2dBundle {
+            //     mesh: .into(),
+            //     transform: Transform::from_xyz(0.0, 0.0, 3.0),
+            //     material: materials.add(ColorMaterial::from(game_constants.water_color)),
+            //     ..default()
+            // },
             LevelEntity,
-            Water,
         ));
     }
 }
 
-fn build_water_path(level_template: &LevelTemplate, time: f32) -> Path {
-    let mut path_builder = PathBuilder::new();
-    let subdivisions = 64;
-    let water_start = -300.0;
-    let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
-
-    for i in 0..subdivisions {
-        let x = water_start + i as f32 * (water_end - water_start) / subdivisions as f32;
-        let y = 100.0 + 10.0 * (0.03 * x + time).sin();
-        path_builder.line_to(Vec2::new(x, y));
-    }
-    path_builder.line_to(Vec2::new(water_end, -100.0));
-    path_builder.line_to(Vec2::new(water_start, -100.0));
-    path_builder.close();
-
-    path_builder.build()
+#[derive(AsBindGroup, TypeUuid, Debug, Clone)]
+#[uuid = "f690fdae-d598-45ab-8225-97e2a3f056e0"]
+pub struct WaterMaterial {
+    #[uniform(0)]
+    time: f32,
 }
 
-fn animate_water(
-    level_template: Res<LevelTemplate>,
-    time: Res<Time>,
-    mut water_query: Query<&mut Path, With<Water>>,
-) {
-    if let Ok(mut water_path) = water_query.get_single_mut() {
-        *water_path = build_water_path(level_template.as_ref(), time.elapsed_seconds());
+impl Material for WaterMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "water_vertex_shader.wgsl".into()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+struct WaterMeshBuilder {
+    subdivisions: i32,
+    water_start: f32,
+    water_end: f32,
+}
+
+impl WaterMeshBuilder {
+    fn new(subdivisions: i32, begin: f32, end: f32) -> Self {
+        Self {
+            subdivisions,
+            water_start: begin,
+            water_end: end,
+        }
+    }
+
+    fn build(&self) -> Mesh {
+        let mut vertices: Vec<Vec3> = Vec::with_capacity(2 * self.subdivisions as usize);
+        for i in 0..self.subdivisions + 1 {
+            let x = self.water_start
+                + i as f32 * (self.water_end - self.water_start) / self.subdivisions as f32;
+            vertices.push(Vec3::new(x, 100.0, 0.0));
+            vertices.push(Vec3::new(x, -200.0, 0.0));
+        }
+
+        let mut indices: Vec<u16> = Vec::with_capacity(6 * (self.subdivisions - 1) as usize);
+        for i in 0..self.subdivisions as u16 {
+            indices.push(2 * i);
+            indices.push(2 * i + 3);
+            indices.push(2 * i + 2);
+
+            indices.push(2 * i + 1);
+            indices.push(2 * i + 3);
+            indices.push(2 * i);
+        }
+
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
+        mesh.set_indices(Some(Indices::U16(indices)));
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+        mesh
+    }
+}
+
+fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
+    for material in materials.iter_mut() {
+        material.1.time = time.elapsed_seconds();
     }
 }
 
