@@ -11,10 +11,26 @@ path = "src/game.rs"
 name = "bird-snake"
 path = "src/desktop_main.rs"
 
+[dependencies.bevy]
+version = "0.9.1"
+default-features = false
+features = [
+    "render",
+    "bevy_winit",
+    "png",
+    "x11",
+    "wayland",
+    "filesystem_watcher",
+]
+
+[dependencies.bevy_kira_audio]
+version = "0.13"
+default-features = false
+features = ["mp3"]
+
 [dependencies]
 wasm-bindgen = "0.2"
 anyhow = "1.0.68"
-bevy = "0.9.1"
 bevy-inspector-egui = "0.16.0"
 bevy_egui = "0.18.0"
 bevy_prototype_debug_lines = "0.9.0"
@@ -26,6 +42,7 @@ thiserror = "1.0.38"
 bevy_prototype_lyon = "0.7.2"
 bracket-color = "~0.8"
 iyes_loopless = "0.9"
+rand = "0.8.5"
 
 # Wasm Dependenccies
 [target.'cfg(target_arch = "wasm32")'.dependencies]

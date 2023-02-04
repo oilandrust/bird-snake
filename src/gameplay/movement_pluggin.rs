@@ -1,5 +1,7 @@
 use bevy::prelude::*;
+use bevy_kira_audio::{Audio, AudioControl};
 use iyes_loopless::prelude::ConditionSet;
+use rand::prelude::*;
 
 use crate::{
     gameplay::commands::SnakeCommands,
@@ -11,7 +13,7 @@ use crate::{
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::{level_instance::LevelInstance, level_template::LevelTemplate},
-    GameState,
+    Assets, GameState,
 };
 
 use super::{
@@ -158,6 +160,8 @@ type WithMovementControlSystemFilter = (
 
 #[allow(clippy::too_many_arguments)]
 pub fn snake_movement_control_system(
+    assets: Res<Assets>,
+    audio: Res<Audio>,
     mut level_instance: ResMut<LevelInstance>,
     constants: Res<GameConstants>,
     mut snake_history: ResMut<SnakeHistory>,
@@ -256,6 +260,10 @@ pub fn snake_movement_control_system(
             lerp_time: 0.0,
         });
     }
+
+    audio
+        .play(assets.move_effect_2.clone())
+        .with_playback_rate(1.0 + rand::thread_rng().gen_range(-0.05..0.1));
 }
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]

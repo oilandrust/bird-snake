@@ -1,19 +1,20 @@
-use std::{f32::consts::PI, time::Duration};
+use std::f32::consts::PI;
 
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    prelude::*,
+    sprite::{Material2dPlugin, MaterialMesh2dBundle},
+};
 use bevy_prototype_lyon::{
-    prelude::{DrawMode, FillMode, GeometryBuilder, Path, PathBuilder},
+    prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
     shapes,
 };
-use iyes_loopless::prelude::{
-    AppLooplessFixedTimestepExt, ConditionHelpers, IntoConditionalSystem,
-};
+use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::{
         to_world, BRIGHT_COLOR_PALETTE, DARK_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT,
-        WALL_COLOR,
     },
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
@@ -22,6 +23,7 @@ use crate::{
     level::level_template::{Cell, LevelTemplate},
     level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
+    render_water::{WaterMaterial, WaterMeshBuilder},
     GameState,
 };
 
@@ -123,11 +125,9 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_system(rotate_goal_system)
-            .add_fixed_timestep(Duration::from_millis(50), "my_fixed_update")
-            .add_fixed_timestep_system(
-                "my_fixed_update",
-                0,
+            .add_plugin(Material2dPlugin::<WaterMaterial>::default())
+            .add_system(rotate_goal_system.run_in_state(GameState::Game))
+            .add_system(
                 animate_water
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>(),
@@ -193,6 +193,8 @@ fn spawn_level_entities_system(
     level_template: Res<LevelTemplate>,
     game_constants: Res<GameConstants>,
     mut level_instance: ResMut<LevelInstance>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<WaterMaterial>>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
@@ -265,45 +267,26 @@ fn spawn_level_entities_system(
 
     // Spawn water
     {
-        let path = build_water_path(&level_template, 0.0);
+        let subdivisions = 64;
+        let water_start = -300.0;
+        let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
+        let water_mesh = WaterMeshBuilder::new(subdivisions, water_start, water_end).build();
 
         commands.spawn((
-            GeometryBuilder::build_as(
-                &path,
-                DrawMode::Fill(FillMode::color(game_constants.water_color)),
-                Transform::from_xyz(0.0, 0.0, 2.0),
-            ),
+            MaterialMesh2dBundle {
+                mesh: meshes.add(water_mesh).into(),
+                transform: Transform::from_xyz(0.0, 0.0, 3.0),
+                material: materials.add(WaterMaterial::from(game_constants.water_color)),
+                ..default()
+            },
             LevelEntity,
-            Water,
         ));
     }
 }
 
-fn build_water_path(level_template: &LevelTemplate, time: f32) -> Path {
-    let mut path_builder = PathBuilder::new();
-    let subdivisions = 64;
-    let water_start = -300.0;
-    let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
-
-    for i in 0..subdivisions {
-        let x = water_start + i as f32 * (water_end - water_start) / subdivisions as f32;
-        let y = 100.0 + 10.0 * (0.03 * x + time).sin();
-        path_builder.line_to(Vec2::new(x, y));
-    }
-    path_builder.line_to(Vec2::new(water_end, -100.0));
-    path_builder.line_to(Vec2::new(water_start, -100.0));
-    path_builder.close();
-
-    path_builder.build()
-}
-
-fn animate_water(
-    level_template: Res<LevelTemplate>,
-    time: Res<Time>,
-    mut water_query: Query<&mut Path, With<Water>>,
-) {
-    if let Ok(mut water_path) = water_query.get_single_mut() {
-        *water_path = build_water_path(level_template.as_ref(), time.elapsed_seconds());
+fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
+    for material in materials.iter_mut() {
+        material.1.time = time.elapsed_seconds();
     }
 }
 

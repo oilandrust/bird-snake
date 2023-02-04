@@ -21,6 +21,9 @@ assets = array
 pngs = glob_array assets/**/*.png
 assets = array_concat ${assets} ${pngs}
 
+mp3s = glob_array assets/**/*.mp3
+assets = array_concat ${assets} ${mp3s}
+
 wavs = glob_array assets/**/*.wav
 assets = array_concat ${assets} ${wavs}
 
@@ -29,6 +32,9 @@ assets = array_concat ${assets} ${oggs}
 
 ttfs = glob_array assets/**/*.ttf
 assets = array_concat ${assets} ${ttfs}
+
+shaders = glob_array assets/**/*.wgsl
+assets = array_concat ${assets} ${shaders}
 
 for path in ${assets}
     cp ${path} release/${PLATFORM}/${path}

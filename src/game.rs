@@ -1,5 +1,6 @@
 use args::Args;
 use bevy::prelude::*;
+use bevy_kira_audio::{Audio, AudioControl, AudioPlugin, AudioSource};
 use bevy_tweening::TweeningPlugin;
 use gameplay::camera_plugin::CameraPlugin;
 use gameplay::game_constants_pluggin::*;
@@ -22,6 +23,7 @@ pub mod args;
 mod gameplay;
 mod level;
 mod menus;
+mod render_water;
 mod tools;
 
 // Don't touch this piece, needed for Web
@@ -130,5 +132,26 @@ pub fn run(app: &mut App, args: &Args) {
         .add_plugin(MainMenuPlugin)
         .add_plugin(SelectLevelMenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })
+        .add_plugin(AudioPlugin)
+        .add_startup_system(load_assets)
         .run();
+}
+
+#[derive(Resource)]
+pub struct Assets {
+    pub background_noise: Handle<AudioSource>,
+    pub move_effect_1: Handle<AudioSource>,
+    pub move_effect_2: Handle<AudioSource>,
+}
+
+fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>, audio: Res<Audio>) {
+    let background_noise: Handle<AudioSource> = asset_server.load("beach.mp3");
+
+    commands.insert_resource(Assets {
+        background_noise: background_noise.clone(),
+        move_effect_1: asset_server.load("effects1.mp3"),
+        move_effect_2: asset_server.load("effects2.mp3"),
+    });
+
+    audio.play(background_noise).looped().with_volume(0.04);
 }

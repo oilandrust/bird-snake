@@ -1,4 +1,7 @@
 Minimum to ship:
+    Bugs:
+    * Eat through food
+
     Web:
     * Window size.
     * Window background while loading.
