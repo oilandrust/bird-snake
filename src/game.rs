@@ -18,14 +18,13 @@ use menus::main_menu::MainMenuPlugin;
 use menus::select_level_menu::{NextLevel, SelectLevelMenuPlugin};
 use menus::MenuPlugin;
 use tools::dev_tools_pluggin::DevToolsPlugin;
-use water_mesh::WaterMesh2dPlugin;
 
 pub mod args;
 mod gameplay;
 mod level;
 mod menus;
+mod render_water;
 mod tools;
-mod water_mesh;
 
 // Don't touch this piece, needed for Web
 #[cfg(target_arch = "wasm32")]
@@ -134,7 +133,6 @@ pub fn run(app: &mut App, args: &Args) {
         .add_plugin(SelectLevelMenuPlugin)
         .add_plugin(GamePlugin { args: args.clone() })
         .add_plugin(AudioPlugin)
-        .add_plugin(WaterMesh2dPlugin)
         .add_startup_system(load_assets)
         .run();
 }

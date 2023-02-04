@@ -47,11 +47,15 @@ impl Plugin for SnakePluggin {
                 CoreStage::PostUpdate,
                 update_snake_transforms_system
                     .run_in_state(GameState::Game)
+                    .label("SnakeTransform")
                     .before(TransformSystem::TransformPropagate),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                update_snake_parts_mesh_system.run_in_state(GameState::Game),
+                update_snake_parts_mesh_system
+                    .run_in_state(GameState::Game)
+                    .after("SnakeTransform")
+                    .before(TransformSystem::TransformPropagate),
             )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
