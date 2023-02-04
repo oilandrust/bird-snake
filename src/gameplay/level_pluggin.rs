@@ -13,9 +13,7 @@ use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
     gameplay::commands::SnakeCommands,
-    gameplay::game_constants_pluggin::{
-        to_world, BRIGHT_COLOR_PALETTE, DARK_COLOR_PALETTE, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT,
-    },
+    gameplay::game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
     gameplay::snake_pluggin::{Active, SelectedSnake, Snake, SpawnSnakeEvent},
     gameplay::undo::SnakeHistory,
@@ -28,7 +26,7 @@ use crate::{
 };
 
 use super::{
-    game_constants_pluggin::GameConstants,
+    game_constants_pluggin::{GameConstants, FOOD_COLOR, SPIKE_COLOR},
     movement_pluggin::{LevelExitAnim, SnakeExitedLevelEvent},
 };
 
@@ -307,7 +305,7 @@ pub fn spawn_spike(commands: &mut Commands, position: &IVec2, level_instance: &m
     commands
         .spawn(GeometryBuilder::build_as(
             &path,
-            DrawMode::Fill(FillMode::color(DARK_COLOR_PALETTE[3])),
+            DrawMode::Fill(FillMode::color(SPIKE_COLOR)),
             Transform {
                 translation: to_world(*position).extend(0.0),
                 ..default()
@@ -328,7 +326,7 @@ pub fn spawn_food(commands: &mut Commands, position: &IVec2, level_instance: &mu
     commands
         .spawn(GeometryBuilder::build_as(
             &shape,
-            DrawMode::Fill(FillMode::color(BRIGHT_COLOR_PALETTE[3])),
+            DrawMode::Fill(FillMode::color(FOOD_COLOR)),
             Transform {
                 translation: to_world(*position).extend(0.0),
                 ..default()

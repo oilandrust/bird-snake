@@ -116,7 +116,7 @@ pub fn run(app: &mut App, args: &Args) {
         GameState::Game
     };
 
-    app.insert_resource(ClearColor(DARK_COLOR_PALETTE[4]))
+    app.insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(Msaa { samples: 4 })
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             window: WindowDescriptor {
