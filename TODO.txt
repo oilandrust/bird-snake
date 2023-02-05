@@ -1,9 +1,7 @@
 Minimum to ship:
-    Web:
-    * Window size.
-    * Window background while loading.
-
     Test all levels
+
+    * cut soundtrack for faster loading
 
     Bugs:
     * Despawn warning exit level

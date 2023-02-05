@@ -5,7 +5,15 @@ use bevy::{
         mesh::Indices,
         render_resource::{AsBindGroup, PrimitiveTopology, ShaderRef},
     },
-    sprite::Material2d,
+    sprite::{Material2d, MaterialMesh2dBundle},
+};
+
+use crate::{
+    gameplay::{
+        game_constants_pluggin::{GameConstants, GRID_TO_WORLD_UNIT},
+        level_pluggin::{LevelEntity, StartLevelEventWithLevel},
+    },
+    level::level_template::LevelTemplate,
 };
 
 #[derive(AsBindGroup, Debug, Clone, TypeUuid)]
@@ -74,5 +82,39 @@ impl WaterMeshBuilder {
         mesh.set_indices(Some(Indices::U16(indices)));
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
         mesh
+    }
+}
+
+pub fn spawn_water_system(
+    mut commands: Commands,
+    level_template: Res<LevelTemplate>,
+    game_constants: Res<GameConstants>,
+    event_start_level: EventReader<StartLevelEventWithLevel>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<WaterMaterial>>,
+) {
+    if event_start_level.is_empty() {
+        return;
+    }
+
+    let subdivisions = 64;
+    let water_start = -300.0;
+    let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
+    let water_mesh = WaterMeshBuilder::new(subdivisions, water_start, water_end).build();
+
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: meshes.add(water_mesh).into(),
+            transform: Transform::from_xyz(0.0, 0.0, 3.0),
+            material: materials.add(WaterMaterial::from(game_constants.water_color)),
+            ..default()
+        },
+        LevelEntity,
+    ));
+}
+
+pub fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
+    for material in materials.iter_mut() {
+        material.1.time = time.elapsed_seconds();
     }
 }

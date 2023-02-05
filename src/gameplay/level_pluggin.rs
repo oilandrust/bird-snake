@@ -1,10 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{
-    app::AppExit,
-    prelude::*,
-    sprite::{Material2dPlugin, MaterialMesh2dBundle},
-};
+use bevy::{app::AppExit, prelude::*, sprite::Material2dPlugin};
 use bevy_prototype_lyon::{
     prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
     shapes,
@@ -12,6 +8,7 @@ use bevy_prototype_lyon::{
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
+    environment::water::WaterMaterial,
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
@@ -21,7 +18,6 @@ use crate::{
     level::level_template::{Cell, LevelTemplate},
     level::levels::LEVELS,
     level::test_levels::TEST_LEVELS,
-    render_water::{WaterMaterial, WaterMeshBuilder},
     GameState,
 };
 
@@ -124,12 +120,7 @@ impl Plugin for LevelPluggin {
                 clear_level_system.run_in_state(GameState::Game),
             )
             .add_plugin(Material2dPlugin::<WaterMaterial>::default())
-            .add_system(rotate_goal_system.run_in_state(GameState::Game))
-            .add_system(
-                animate_water
-                    .run_in_state(GameState::Game)
-                    .run_if_resource_exists::<LevelInstance>(),
-            );
+            .add_system(rotate_goal_system.run_in_state(GameState::Game));
     }
 }
 
@@ -191,8 +182,6 @@ fn spawn_level_entities_system(
     level_template: Res<LevelTemplate>,
     game_constants: Res<GameConstants>,
     mut level_instance: ResMut<LevelInstance>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<WaterMaterial>>,
 ) {
     if event_start_level.iter().next().is_none() {
         return;
@@ -261,30 +250,6 @@ fn spawn_level_entities_system(
             Goal(level_template.goal_position),
             LevelEntity,
         ));
-    }
-
-    // Spawn water
-    {
-        let subdivisions = 64;
-        let water_start = -300.0;
-        let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
-        let water_mesh = WaterMeshBuilder::new(subdivisions, water_start, water_end).build();
-
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes.add(water_mesh).into(),
-                transform: Transform::from_xyz(0.0, 0.0, 3.0),
-                material: materials.add(WaterMaterial::from(game_constants.water_color)),
-                ..default()
-            },
-            LevelEntity,
-        ));
-    }
-}
-
-fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
-    for material in materials.iter_mut() {
-        material.1.time = time.elapsed_seconds();
     }
 }
 
