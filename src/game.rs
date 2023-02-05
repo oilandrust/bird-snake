@@ -153,5 +153,5 @@ fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>, audio: Re
         move_effect_2: asset_server.load("effects2.mp3"),
     });
 
-    audio.play(background_noise).looped().with_volume(0.04);
+    audio.play(background_noise).looped().with_volume(0.1);
 }

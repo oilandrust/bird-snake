@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use bevy_kira_audio::{Audio, AudioControl};
-use iyes_loopless::prelude::ConditionSet;
+use bevy_tweening::{
+    component_animator_system, AnimationSystem, Animator, EaseFunction, Lens, Tween,
+};
+use iyes_loopless::prelude::{ConditionSet, IntoConditionalSystem};
 use rand::prelude::*;
 
 use crate::{
@@ -8,8 +11,7 @@ use crate::{
     gameplay::game_constants_pluggin::*,
     gameplay::level_pluggin::Food,
     gameplay::snake_pluggin::{
-        grow_snake_on_move_system, respawn_snake_on_fall_system, Active, SelectedSnake, Snake,
-        SpawnSnakeEvent,
+        respawn_snake_on_fall_system, Active, SelectedSnake, Snake, SpawnSnakeEvent,
     },
     gameplay::undo::{keyboard_undo_system, undo_event_system, SnakeHistory, UndoEvent},
     level::{level_instance::LevelInstance, level_template::LevelTemplate},
@@ -18,7 +20,7 @@ use crate::{
 
 use super::{
     level_pluggin::Goal,
-    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart},
+    snake_pluggin::{DespawnSnakePartEvent, PartClipper, SnakeEye, SnakePart, SnakePartBundle},
 };
 
 const MOVE_UP_KEYS: [KeyCode; 2] = [KeyCode::W, KeyCode::Up];
@@ -52,6 +54,19 @@ pub struct LevelExitAnim {
     pub initial_snake_position: Vec<(IVec2, IVec2)>,
 }
 
+#[derive(Component)]
+pub struct PartGrowAnim {
+    pub grow_factor: f32,
+}
+
+struct GrowPartLens;
+
+impl Lens<PartGrowAnim> for GrowPartLens {
+    fn lerp(&mut self, target: &mut PartGrowAnim, ratio: f32) {
+        target.grow_factor = ratio;
+    }
+}
+
 pub struct MovementPluggin;
 
 pub struct MoveCommandEvent(pub IVec2);
@@ -65,6 +80,8 @@ pub struct SnakeExitedLevelEvent;
 const KEYBOARD_INPUT: &str = "KEYBOARD_INPUT";
 const UNDO: &str = "UNDO";
 const SNAKE_MOVEMENT: &str = "SNAKE_MOVEMENT";
+const SNAKE_GROW: &str = "SNAKE_GROW";
+const SNAKE_FALL: &str = "SNAKE_FALL";
 const SMOOTH_MOVEMENT: &str = "SMOOTH_MOVEMENT";
 
 impl Plugin for MovementPluggin {
@@ -100,21 +117,36 @@ impl Plugin for MovementPluggin {
                     .label(SNAKE_MOVEMENT)
                     .after(UNDO)
                     .with_system(snake_movement_control_system)
-                    .with_system(grow_snake_on_move_system)
-                    .with_system(gravity_system)
                     .into(),
+            )
+            .add_system(
+                grow_snake_on_move_system
+                    .run_in_state(GameState::Game)
+                    .label(SNAKE_GROW)
+                    .after(SNAKE_MOVEMENT),
+            )
+            .add_system(
+                gravity_system
+                    .run_in_state(GameState::Game)
+                    .label(SNAKE_FALL)
+                    .after(SNAKE_GROW),
             )
             .add_system_set(
                 ConditionSet::new()
                     .run_in_state(GameState::Game)
                     .run_if_resource_exists::<LevelInstance>()
                     .label(SMOOTH_MOVEMENT)
-                    .after(SNAKE_MOVEMENT)
+                    .after(SNAKE_FALL)
                     .with_system(snake_smooth_movement_system)
                     .with_system(snake_push_anim_system)
                     .with_system(snake_exit_level_anim_system)
                     .with_system(respawn_snake_on_fall_system)
                     .into(),
+            )
+            .add_system(
+                component_animator_system::<PartGrowAnim>
+                    .run_in_state(GameState::Game)
+                    .label(AnimationSystem::AnimationUpdate),
             );
     }
 }
@@ -263,7 +295,43 @@ pub fn snake_movement_control_system(
 
     audio
         .play(assets.move_effect_2.clone())
-        .with_playback_rate(1.0 + rand::thread_rng().gen_range(-0.05..0.1));
+        .with_playback_rate(1.0 + rand::thread_rng().gen_range(-0.05..0.1))
+        .with_volume(2.0);
+}
+
+pub fn grow_snake_on_move_system(
+    mut snake_moved_event: EventReader<SnakeMovedEvent>,
+    mut commands: Commands,
+    snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
+    foods_query: Query<(Entity, &Food), With<Food>>,
+) {
+    if snake_moved_event.iter().next().is_none() {
+        return;
+    }
+
+    let Ok((snake_entity, snake)) = snake_query.get_single() else {
+        return;
+    };
+
+    for (food_entity, food) in &foods_query {
+        if food.0 != snake.head_position() {
+            continue;
+        }
+
+        commands.entity(food_entity).despawn();
+
+        let grow_tween = Tween::new(
+            EaseFunction::QuadraticInOut,
+            std::time::Duration::from_secs_f32(0.2),
+            GrowPartLens,
+        );
+
+        commands.entity(snake_entity).with_children(|parent| {
+            parent
+                .spawn(SnakePartBundle::new(snake.index(), snake.len() - 1))
+                .insert((Animator::new(grow_tween), PartGrowAnim { grow_factor: 0.0 }));
+        });
+    }
 }
 
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]

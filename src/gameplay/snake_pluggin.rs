@@ -3,9 +3,6 @@ use bevy_prototype_lyon::{
     entity::ShapeBundle,
     prelude::{DrawMode, FillMode, Path, PathBuilder, ShapePlugin},
 };
-use bevy_tweening::{
-    component_animator_system, AnimationSystem, Animator, EaseFunction, Lens, Tween,
-};
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 use std::{collections::VecDeque, mem};
 
@@ -14,13 +11,15 @@ use crate::{
     gameplay::game_constants_pluggin::{
         to_grid, to_world, GRID_TO_WORLD_UNIT, SNAKE_COLORS, SNAKE_EYE_SIZE,
     },
-    gameplay::level_pluggin::{Food, LevelEntity},
-    gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim, SnakeMovedEvent},
+    gameplay::level_pluggin::LevelEntity,
+    gameplay::movement_pluggin::{GravityFall, MoveCommand, PushedAnim},
     gameplay::undo::{SnakeHistory, UndoEvent},
     level::level_instance::{LevelEntityType, LevelInstance},
     level::level_template::{LevelTemplate, SnakeTemplate},
     GameState,
 };
+
+use super::movement_pluggin::PartGrowAnim;
 
 pub struct SnakePluggin;
 
@@ -38,11 +37,6 @@ impl Plugin for SnakePluggin {
                     .run_if_resource_exists::<LevelInstance>(),
             )
             .add_system(select_snake_mouse_system.run_in_state(GameState::Game))
-            .add_system(
-                component_animator_system::<PartGrowAnim>
-                    .run_in_state(GameState::Game)
-                    .label(AnimationSystem::AnimationUpdate),
-            )
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 update_snake_transforms_system
@@ -99,14 +93,14 @@ pub struct SnakePart {
 pub struct SnakeEye;
 
 #[derive(Bundle)]
-struct SnakePartBundle {
-    part: SnakePart,
-    level_entity: LevelEntity,
-    shape: ShapeBundle,
+pub struct SnakePartBundle {
+    pub part: SnakePart,
+    pub level_entity: LevelEntity,
+    pub shape: ShapeBundle,
 }
 
 impl SnakePartBundle {
-    fn new(snake_index: i32, part_index: usize) -> Self {
+    pub fn new(snake_index: i32, part_index: usize) -> Self {
         let color = SNAKE_COLORS[snake_index as usize][part_index % 2];
 
         SnakePartBundle {
@@ -126,19 +120,6 @@ impl SnakePartBundle {
 #[derive(Component)]
 pub struct PartClipper {
     pub clip_position: IVec2,
-}
-
-#[derive(Component)]
-pub struct PartGrowAnim {
-    pub grow_factor: f32,
-}
-
-struct GrowPartLens;
-
-impl Lens<PartGrowAnim> for GrowPartLens {
-    fn lerp(&mut self, target: &mut PartGrowAnim, ratio: f32) {
-        target.grow_factor = ratio;
-    }
 }
 
 #[derive(Component, Debug)]
@@ -590,41 +571,6 @@ pub fn respawn_snake_on_fall_system(
         commands.entity(snake_entity).remove::<GravityFall>();
 
         trigger_undo_event.send(UndoEvent);
-    }
-}
-
-pub fn grow_snake_on_move_system(
-    mut snake_moved_event: EventReader<SnakeMovedEvent>,
-    mut commands: Commands,
-    snake_query: Query<(Entity, &Snake), With<SelectedSnake>>,
-    foods_query: Query<(Entity, &Food), With<Food>>,
-) {
-    if snake_moved_event.iter().next().is_none() {
-        return;
-    }
-
-    let Ok((snake_entity, snake)) = snake_query.get_single() else {
-        return;
-    };
-
-    for (food_entity, food) in &foods_query {
-        if food.0 != snake.head_position() {
-            continue;
-        }
-
-        commands.entity(food_entity).despawn();
-
-        let grow_tween = Tween::new(
-            EaseFunction::QuadraticInOut,
-            std::time::Duration::from_secs_f32(0.2),
-            GrowPartLens,
-        );
-
-        commands.entity(snake_entity).with_children(|parent| {
-            parent
-                .spawn(SnakePartBundle::new(snake.index, snake.len() - 1))
-                .insert((Animator::new(grow_tween), PartGrowAnim { grow_factor: 0.0 }));
-        });
     }
 }
 
