@@ -1,20 +1,11 @@
 Minimum to ship:
-    Bugs:
-    * Eat through food
-
     Web:
     * Window size.
     * Window background while loading.
 
-    Menu:
-    * Title
-    * Main menu style
-
     Test all levels
 
     Bugs:
-    * Second escape on desktop
-    * espcape main menu on web
     * Despawn warning exit level
 
 Bonus
