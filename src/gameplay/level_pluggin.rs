@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{app::AppExit, prelude::*, sprite::Material2dPlugin};
+use bevy::{app::AppExit, prelude::*};
 use bevy_prototype_lyon::{
     prelude::{DrawMode, FillMode, GeometryBuilder, PathBuilder},
     shapes,
@@ -8,7 +8,6 @@ use bevy_prototype_lyon::{
 use iyes_loopless::prelude::{ConditionHelpers, IntoConditionalSystem};
 
 use crate::{
-    environment::water::WaterMaterial,
     gameplay::commands::SnakeCommands,
     gameplay::game_constants_pluggin::{to_world, GRID_CELL_SIZE, GRID_TO_WORLD_UNIT},
     gameplay::movement_pluggin::{GravityFall, SnakeReachGoalEvent},
@@ -119,7 +118,6 @@ impl Plugin for LevelPluggin {
                 CoreStage::Last,
                 clear_level_system.run_in_state(GameState::Game),
             )
-            .add_plugin(Material2dPlugin::<WaterMaterial>::default())
             .add_system(rotate_goal_system.run_in_state(GameState::Game));
     }
 }

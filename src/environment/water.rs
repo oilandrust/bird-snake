@@ -18,12 +18,12 @@ use crate::{
 
 #[derive(AsBindGroup, Debug, Clone, TypeUuid)]
 #[uuid = "f690fdae-d598-45ab-8225-97e2a3f056e0"]
-pub struct WaterMaterial {
+pub(super) struct WaterMaterial {
     #[uniform(0)]
     color: Color,
 
     #[uniform(0)]
-    pub time: f32,
+    time: f32,
 }
 
 impl Material2d for WaterMaterial {
@@ -43,14 +43,14 @@ impl From<Color> for WaterMaterial {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub struct WaterMeshBuilder {
+struct WaterMeshBuilder {
     subdivisions: i32,
     water_start: f32,
     water_end: f32,
 }
 
 impl WaterMeshBuilder {
-    pub fn new(subdivisions: i32, begin: f32, end: f32) -> Self {
+    fn new(subdivisions: i32, begin: f32, end: f32) -> Self {
         Self {
             subdivisions,
             water_start: begin,
@@ -58,7 +58,7 @@ impl WaterMeshBuilder {
         }
     }
 
-    pub fn build(&self) -> Mesh {
+    fn build(&self) -> Mesh {
         let mut vertices: Vec<Vec3> = Vec::with_capacity(2 * self.subdivisions as usize);
         for i in 0..self.subdivisions + 1 {
             let x = self.water_start
@@ -85,7 +85,7 @@ impl WaterMeshBuilder {
     }
 }
 
-pub fn spawn_water_system(
+pub(super) fn spawn_water_system(
     mut commands: Commands,
     level_template: Res<LevelTemplate>,
     game_constants: Res<GameConstants>,
@@ -113,7 +113,7 @@ pub fn spawn_water_system(
     ));
 }
 
-pub fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
+pub(super) fn animate_water(time: Res<Time>, mut materials: ResMut<Assets<WaterMaterial>>) {
     for material in materials.iter_mut() {
         material.1.time = time.elapsed_seconds();
     }
