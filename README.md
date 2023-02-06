@@ -1,8 +1,8 @@
 # BirdSnake
 
-## Play the game on the browser using webassbmly.
+## Play the game on the browser using webassebmly.
 
-[Try int now!](https://oliver-rust.itch.io/bird-snake)
+[Try it now!](https://oliver-rust.itch.io/bird-snake)
 
 ## A Snakebird clone writen in rust using the Bevy engine.
 
