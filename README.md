@@ -1,5 +1,9 @@
 # BirdSnake
 
+## Play the game on the browser using webassbmly.
+
+[Try int now!](https://oliver-rust.itch.io/bird-snake)
+
 ## A Snakebird clone writen in rust using the Bevy engine.
 
 Snakebird is a famous puzzle game derived from snake known for it's funky movement mechanics. It is also known to have very hard puzzles depite it's cute and friendly graphics.

@@ -64,7 +64,7 @@ impl WaterMeshBuilder {
             let x = self.water_start
                 + i as f32 * (self.water_end - self.water_start) / self.subdivisions as f32;
             vertices.push(Vec3::new(x, 100.0, 0.0));
-            vertices.push(Vec3::new(x, -200.0, 0.0));
+            vertices.push(Vec3::new(x, -500.0, 0.0));
         }
 
         let mut indices: Vec<u16> = Vec::with_capacity(6 * (self.subdivisions - 1) as usize);
@@ -97,9 +97,9 @@ pub(super) fn spawn_water_system(
         return;
     }
 
-    let subdivisions = 64;
-    let water_start = -300.0;
-    let water_end = 300.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
+    let subdivisions = 128;
+    let water_start = -800.0;
+    let water_end = 800.0 + GRID_TO_WORLD_UNIT * level_template.grid.width() as f32;
     let water_mesh = WaterMeshBuilder::new(subdivisions, water_start, water_end).build();
 
     commands.spawn((

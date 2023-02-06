@@ -69,7 +69,7 @@ fn camera_zoom_scroll_system(
         return;
     };
 
-    const SCALE_MAX: f32 = 1.5;
+    const SCALE_MAX: f32 = 1.3;
     const SCALE_MIN: f32 = 0.5;
 
     for event in scroll_event.iter() {
